@@ -1,0 +1,8 @@
+node_modules
+*.local
+*.log
+
+# Built UI is embedded into the Go binary. dist/.gitkeep stays tracked so
+# go:embed compiles before the UI has been built.
+dist/*
+!dist/.gitkeep

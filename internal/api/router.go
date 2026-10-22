@@ -2,6 +2,7 @@
 package api
 
 import (
+	"io/fs"
 	"log/slog"
 	"net/http"
 )
@@ -13,6 +14,8 @@ const APIPrefix = "/api/v1"
 type Deps struct {
 	Logger       *slog.Logger
 	HealthChecks []HealthCheck
+	// UI is the built web app. When nil, no UI is served.
+	UI fs.FS
 }
 
 // NewRouter builds the top-level HTTP handler.
@@ -20,11 +23,18 @@ func NewRouter(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /healthz", healthHandler(d.HealthChecks))
 
-	apiMux := http.NewServeMux()
-	apiMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	notFound := func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
-	})
+	}
+	apiMux := http.NewServeMux()
+	apiMux.HandleFunc("/", notFound)
 	mux.Handle(APIPrefix+"/", http.StripPrefix(APIPrefix, apiMux))
+	// Unknown API paths must not fall through to the UI.
+	mux.HandleFunc("/api/", notFound)
+
+	if d.UI != nil {
+		mux.Handle("/", spaHandler(d.UI))
+	}
 
 	return logRequests(d.Logger, mux)
 }
