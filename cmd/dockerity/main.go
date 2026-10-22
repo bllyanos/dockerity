@@ -10,10 +10,12 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/bllyanos/dockerity/internal/api"
 	"github.com/bllyanos/dockerity/internal/config"
 	"github.com/bllyanos/dockerity/internal/dockerx"
+	"github.com/bllyanos/dockerity/internal/healthprobe"
 	"github.com/bllyanos/dockerity/internal/httpserver"
 	"github.com/bllyanos/dockerity/internal/logging"
 	"github.com/bllyanos/dockerity/internal/store/sqlite"
@@ -24,7 +26,11 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := run(ctx); err != nil {
+	cmd := run
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		cmd = healthcheck
+	}
+	if err := cmd(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "dockerity:", err)
 		os.Exit(1)
 	}
@@ -58,6 +64,19 @@ func run(ctx context.Context) error {
 		},
 	})
 	return httpserver.Run(ctx, logger, cfg.ListenAddr, router)
+}
+
+// healthcheck probes the local server; used by the container HEALTHCHECK.
+func healthcheck(ctx context.Context) error {
+	cfg, err := config.Load(os.LookupEnv)
+	if err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
+	url, err := healthprobe.URL(cfg.ListenAddr)
+	if err != nil {
+		return err
+	}
+	return healthprobe.Probe(ctx, url, 3*time.Second)
 }
 
 func openDatabase(ctx context.Context, logger *slog.Logger, dataDir string) (*sql.DB, error) {
