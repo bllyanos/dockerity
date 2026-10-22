@@ -19,6 +19,18 @@ single action.
 - **Secrets** encrypted at rest, versioned with each deployment.
 - **Web UI and HTTP API.**
 
+## Bootstrap
+
+On the VM, from `deploy/`:
+
+```sh
+openssl rand -base64 32 > master_key && chmod 600 master_key
+DOCKERITY_HOST=dockerity.example.com docker compose up -d --build
+```
+
+This starts Traefik (ports 80/443) and Dockerity behind it. `DOCKERITY_HTTP_PORT`,
+`DOCKERITY_HTTPS_PORT` and `DOCKERITY_IMAGE` override the defaults.
+
 ## Stack
 
 Go, React + Tailwind, SQLite. Dockerity runs as a container next to Traefik on the VM it manages.
