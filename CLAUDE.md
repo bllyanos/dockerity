@@ -67,6 +67,11 @@ Planned layout is in section 12 of `docs/design.md`. Keep stable, pure logic (sp
 naming, deploy planning, Traefik label generation) in packages with no Docker or SQLite
 dependency so it can be unit-tested in isolation. Docker access goes through `internal/dockerx`.
 
+## Planning
+
+Work is tracked as GitHub epics (label `epic`) that are broken into sub-issues during planning.
+Priority labels, milestones and ordering rules are in `docs/prioritization.md`.
+
 ## Conventions
 
 - Code, comments, commits and docs are in English.
