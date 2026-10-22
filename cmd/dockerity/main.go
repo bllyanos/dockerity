@@ -13,6 +13,7 @@ import (
 
 	"github.com/bllyanos/dockerity/internal/api"
 	"github.com/bllyanos/dockerity/internal/config"
+	"github.com/bllyanos/dockerity/internal/dockerx"
 	"github.com/bllyanos/dockerity/internal/httpserver"
 	"github.com/bllyanos/dockerity/internal/logging"
 	"github.com/bllyanos/dockerity/internal/store/sqlite"
@@ -41,9 +42,18 @@ func run(ctx context.Context) error {
 	}
 	defer db.Close()
 
+	docker, err := connectDocker(ctx, logger)
+	if err != nil {
+		return err
+	}
+	defer docker.Close()
+
 	router := api.NewRouter(api.Deps{
-		Logger:       logger,
-		HealthChecks: []api.HealthCheck{sqlite.HealthCheck{DB: db}},
+		Logger: logger,
+		HealthChecks: []api.HealthCheck{
+			sqlite.HealthCheck{DB: db},
+			dockerx.HealthCheck{Docker: docker},
+		},
 	})
 	return httpserver.Run(ctx, logger, cfg.ListenAddr, router)
 }
@@ -65,4 +75,19 @@ func openDatabase(ctx context.Context, logger *slog.Logger, dataDir string) (*sq
 	}
 	logger.Info("database ready", "path", filepath.Join(dataDir, sqlite.FileName), "migrations_applied", applied)
 	return db, nil
+}
+
+// connectDocker fails fast when the Docker socket is not usable.
+func connectDocker(ctx context.Context, logger *slog.Logger) (*dockerx.Client, error) {
+	docker, err := dockerx.New()
+	if err != nil {
+		return nil, err
+	}
+	info, err := docker.ServerInfo(ctx)
+	if err != nil {
+		docker.Close()
+		return nil, fmt.Errorf("docker engine unreachable (is /var/run/docker.sock mounted?): %w", err)
+	}
+	logger.Info("docker connected", "version", info.Version, "api_version", info.APIVersion, "os", info.OS, "arch", info.Arch)
+	return docker, nil
 }
