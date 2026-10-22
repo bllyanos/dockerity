@@ -17,6 +17,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/httpserver"
 	"github.com/bllyanos/dockerity/internal/logging"
 	"github.com/bllyanos/dockerity/internal/store/sqlite"
+	"github.com/bllyanos/dockerity/web"
 )
 
 func main() {
@@ -50,6 +51,7 @@ func run(ctx context.Context) error {
 
 	router := api.NewRouter(api.Deps{
 		Logger: logger,
+		UI:     web.Dist(),
 		HealthChecks: []api.HealthCheck{
 			sqlite.HealthCheck{DB: db},
 			dockerx.HealthCheck{Docker: docker},
