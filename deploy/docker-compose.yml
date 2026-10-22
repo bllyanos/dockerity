@@ -1,0 +1,63 @@
+# Bootstrap: the only thing started by hand (docs/design.md section 13).
+#
+#   openssl rand -base64 32 > master_key && chmod 600 master_key
+#   DOCKERITY_HOST=dockerity.example.com docker compose up -d
+#
+# Update Dockerity by pulling or rebuilding this stack, outside Dockerity.
+name: dockerity
+
+services:
+  traefik:
+    image: traefik:v3.7.16
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.network=dockerity-edge
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+    ports:
+      - "${DOCKERITY_HTTP_PORT:-80}:80"
+      - "${DOCKERITY_HTTPS_PORT:-443}:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - edge
+    labels:
+      dockerity.system: "true"
+
+  dockerity:
+    image: ${DOCKERITY_IMAGE:-dockerity:local}
+    build:
+      context: ..
+    restart: unless-stopped
+    environment:
+      DOCKERITY_LOG_LEVEL: ${DOCKERITY_LOG_LEVEL:-info}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - dockerity-data:/data
+      - dockerity-backups:/backups
+    secrets:
+      - master_key
+    networks:
+      - edge
+    labels:
+      dockerity.system: "true"
+      traefik.enable: "true"
+      traefik.http.routers.dockerity.rule: Host(`${DOCKERITY_HOST:-dockerity.localhost}`)
+      traefik.http.routers.dockerity.entrypoints: web
+      traefik.http.services.dockerity.loadbalancer.server.port: "8080"
+
+networks:
+  edge:
+    name: dockerity-edge
+
+volumes:
+  dockerity-data:
+    name: dockerity-data
+  dockerity-backups:
+    name: dockerity-backups
+
+secrets:
+  master_key:
+    file: ./master_key
