@@ -3,15 +3,19 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/bllyanos/dockerity/internal/api"
 	"github.com/bllyanos/dockerity/internal/config"
 	"github.com/bllyanos/dockerity/internal/httpserver"
 	"github.com/bllyanos/dockerity/internal/logging"
+	"github.com/bllyanos/dockerity/internal/store/sqlite"
 )
 
 func main() {
@@ -31,6 +35,34 @@ func run(ctx context.Context) error {
 	}
 	logger := logging.New(os.Stdout, cfg.LogLevel)
 
-	router := api.NewRouter(api.Deps{Logger: logger})
+	db, err := openDatabase(ctx, logger, cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	router := api.NewRouter(api.Deps{
+		Logger:       logger,
+		HealthChecks: []api.HealthCheck{sqlite.HealthCheck{DB: db}},
+	})
 	return httpserver.Run(ctx, logger, cfg.ListenAddr, router)
+}
+
+func openDatabase(ctx context.Context, logger *slog.Logger, dataDir string) (*sql.DB, error) {
+	db, err := sqlite.Open(ctx, dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("database: %w", err)
+	}
+	migrations, err := sqlite.Migrations()
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("load migrations: %w", err)
+	}
+	applied, err := sqlite.Migrate(ctx, db, migrations)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
+	logger.Info("database ready", "path", filepath.Join(dataDir, sqlite.FileName), "migrations_applied", applied)
+	return db, nil
 }
