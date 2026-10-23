@@ -348,3 +348,28 @@ func (m *memSecretStore) Versions(_ context.Context, s secrets.Scope) ([]secrets
 func (m *memSecretStore) Values(_ context.Context, s secrets.Scope, v int) (map[string]string, error) {
 	return m.versions[s][v-1], nil
 }
+
+// fakeDeployments: environment 1 accepts one deployment at a time.
+type fakeDeployments struct{ deps []domain.Deployment }
+
+func (f *fakeDeployments) Start(_ context.Context, envID, buildID int64, _ *int64) (domain.Deployment, error) {
+	for _, d := range f.deps {
+		if !d.Status.Terminal() {
+			return domain.Deployment{}, domain.Conflictf("a deployment is already in progress")
+		}
+	}
+	d := domain.Deployment{ID: int64(len(f.deps) + 1), EnvID: envID, BuildID: buildID, SpecVersion: 1, Status: domain.DeploymentPending}
+	f.deps = append(f.deps, d)
+	return d, nil
+}
+
+func (f *fakeDeployments) List(context.Context, int64) ([]domain.Deployment, error) {
+	return f.deps, nil
+}
+
+func (f *fakeDeployments) Get(_ context.Context, id int64) (domain.Deployment, []domain.DeploymentStep, error) {
+	if id < 1 || int(id) > len(f.deps) {
+		return domain.Deployment{}, nil, domain.ErrNotFound
+	}
+	return f.deps[id-1], []domain.DeploymentStep{{Position: 1, Kind: "ensure_network", Status: domain.StepSucceeded}}, nil
+}
