@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bllyanos/dockerity/internal/domain"
+	"github.com/bllyanos/dockerity/internal/settings"
 )
 
 type memStore struct{ envs []domain.Environment }
@@ -44,6 +45,11 @@ func (m *memStore) CreateEnvironment(_ context.Context, e domain.Environment) (d
 
 func (m *memStore) UpdateEnvironment(_ context.Context, e domain.Environment) error {
 	m.envs[e.ID-1] = e
+	return nil
+}
+
+func (m *memStore) SetExpiry(_ context.Context, id int64, t time.Time) error {
+	m.envs[id-1].ExpiresAt = &t
 	return nil
 }
 
@@ -180,5 +186,41 @@ func TestDeleteGuardsAndTearsDown(t *testing.T) {
 	s.Deployments = deploymentsFake{status: domain.DeploymentSucceeded}
 	if _, err := s.Delete(ctx, e.ID, false); err != nil || len(rt.removed) != 1 || rt.removed[0] != "shop/staging" {
 		t.Fatalf("delete: %v %v", err, rt.removed)
+	}
+}
+
+type baseDomain string
+
+func (b baseDomain) Get(context.Context) (settings.Settings, error) {
+	return settings.Settings{BaseDomain: string(b)}, nil
+}
+
+func TestEphemeral(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	s := &Service{Store: &memStore{}, Apps: oneApp{}, Settings: baseDomain("apps.test"), Now: func() time.Time { return now }}
+	ctx := context.Background()
+
+	e, err := s.CreateEphemeral(ctx, 1, "pr-42", 0)
+	if err != nil || e.Domain != "pr-42.shop.apps.test" || e.Type != domain.EnvEphemeral || e.TTL != domain.DefaultEphemeralTTL ||
+		!e.ExpiresAt.Equal(now.Add(domain.DefaultEphemeralTTL)) {
+		t.Fatalf("create %+v %v", e, err)
+	}
+	var ve *domain.ValidationError
+	if _, err := s.CreateEphemeral(ctx, 1, "pr-43", time.Minute); !errors.As(err, &ve) {
+		t.Fatalf("short ttl: %v", err)
+	}
+	if _, err := s.UpdateDomain(ctx, e.ID, "x.example.com"); !errors.As(err, &ve) {
+		t.Fatalf("ephemeral domain change: %v", err)
+	}
+
+	now = now.Add(time.Hour)
+	got, err := s.Extend(ctx, e.ID)
+	if err != nil || !got.ExpiresAt.Equal(now.Add(domain.DefaultEphemeralTTL)) {
+		t.Fatalf("extend %+v %v", got, err)
+	}
+
+	s.Settings = baseDomain("")
+	if _, err := s.CreateEphemeral(ctx, 1, "pr-44", 0); !errors.As(err, &ve) {
+		t.Fatalf("no base domain: %v", err)
 	}
 }

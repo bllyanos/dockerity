@@ -17,6 +17,7 @@ type EnvironmentService interface {
 	CreatePermanent(ctx context.Context, appID int64, name, host string) (domain.Environment, error)
 	UpdateDomain(ctx context.Context, id int64, host string) (domain.Environment, error)
 	Delete(ctx context.Context, id int64, skipBackup bool) (domain.Environment, error)
+	Extend(ctx context.Context, id int64) (domain.Environment, error)
 }
 
 type environmentHandlers struct {
@@ -31,22 +32,25 @@ func (h environmentHandlers) register(rt *routes) {
 	rt.handle("GET /environments/{id}", h.get)
 	rt.handle("PATCH /environments/{id}", h.update)
 	rt.handle("DELETE /environments/{id}", h.delete)
+	rt.handle("POST /environments/{id}/extend", h.extend)
 }
 
 type environmentView struct {
-	ID        int64          `json:"id"`
-	AppID     int64          `json:"appId"`
-	AppName   string         `json:"appName"`
-	Name      string         `json:"name"`
-	Type      domain.EnvType `json:"type"`
-	Domain    string         `json:"domain"`
-	CreatedAt time.Time      `json:"createdAt"`
-	UpdatedAt time.Time      `json:"updatedAt"`
+	ID         int64          `json:"id"`
+	AppID      int64          `json:"appId"`
+	AppName    string         `json:"appName"`
+	Name       string         `json:"name"`
+	Type       domain.EnvType `json:"type"`
+	Domain     string         `json:"domain"`
+	TTLSeconds int64          `json:"ttlSeconds"`
+	ExpiresAt  *time.Time     `json:"expiresAt"`
+	CreatedAt  time.Time      `json:"createdAt"`
+	UpdatedAt  time.Time      `json:"updatedAt"`
 }
 
 func toEnvView(e domain.Environment) environmentView {
 	return environmentView{ID: e.ID, AppID: e.AppID, AppName: e.AppName, Name: e.Name, Type: e.Type,
-		Domain: e.Domain, CreatedAt: e.CreatedAt, UpdatedAt: e.UpdatedAt}
+		Domain: e.Domain, TTLSeconds: int64(e.TTL / time.Second), ExpiresAt: e.ExpiresAt, CreatedAt: e.CreatedAt, UpdatedAt: e.UpdatedAt}
 }
 
 func envEvent(action string, e domain.Environment) domain.AuditEvent {
@@ -144,4 +148,18 @@ func (h environmentHandlers) delete(w http.ResponseWriter, r *http.Request) {
 	ev.Metadata["skip_backup"] = strconv.FormatBool(skipBackup)
 	h.audit.record(r, ev)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h environmentHandlers) extend(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	e, err := h.envs.Extend(r.Context(), id)
+	if err != nil {
+		writeServiceError(w, r, h.logger, err)
+		return
+	}
+	h.audit.record(r, envEvent(domain.AuditEnvironmentExtended, e))
+	writeJSON(w, http.StatusOK, map[string]environmentView{"environment": toEnvView(e)})
 }

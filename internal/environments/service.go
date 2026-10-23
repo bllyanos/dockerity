@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bllyanos/dockerity/internal/domain"
+	"github.com/bllyanos/dockerity/internal/settings"
 )
 
 // Store persists environments.
@@ -18,6 +19,7 @@ type Store interface {
 	CreateEnvironment(ctx context.Context, e domain.Environment) (domain.Environment, error)
 	UpdateEnvironment(ctx context.Context, e domain.Environment) error
 	DeleteEnvironment(ctx context.Context, id int64) error
+	SetExpiry(ctx context.Context, id int64, expires time.Time) error
 }
 
 // Service implements environment create, update and delete.
@@ -42,6 +44,10 @@ type Service struct {
 	// Routes, when set, rewrites the environment's routes after a domain change.
 	Routes interface {
 		RebuildRoutes(ctx context.Context, envID int64) error
+	}
+	// Settings provides the base domain of ephemeral environments.
+	Settings interface {
+		Get(ctx context.Context) (settings.Settings, error)
 	}
 	Now func() time.Time
 }
@@ -85,11 +91,72 @@ func (s *Service) CreatePermanent(ctx context.Context, appID int64, name, host s
 	return e, err
 }
 
+// CreateEphemeral adds an ephemeral environment named <name>.<app>.<baseDomain>
+// that expires after ttl (DefaultEphemeralTTL when zero).
+func (s *Service) CreateEphemeral(ctx context.Context, appID int64, name string, ttl time.Duration) (domain.Environment, error) {
+	app, err := s.Apps.Get(ctx, appID)
+	if err != nil {
+		return domain.Environment{}, err
+	}
+	name = strings.TrimSpace(name)
+	if err := domain.ValidateEnvName(name); err != nil {
+		return domain.Environment{}, err
+	}
+	if ttl == 0 {
+		ttl = domain.DefaultEphemeralTTL
+	}
+	if ttl < domain.MinEphemeralTTL || ttl > domain.MaxEphemeralTTL {
+		return domain.Environment{}, domain.Invalid("ttl", "must be between %s and %s", domain.MinEphemeralTTL, domain.MaxEphemeralTTL)
+	}
+	cfg, err := s.Settings.Get(ctx)
+	if err != nil {
+		return domain.Environment{}, err
+	}
+	if cfg.BaseDomain == "" {
+		return domain.Environment{}, domain.Invalid("baseDomain", "set a base domain in the settings before spawning ephemeral environments")
+	}
+	host := domain.EphemeralDomain(name, app.Name, cfg.BaseDomain)
+	if err := domain.ValidateDomain(host); err != nil {
+		return domain.Environment{}, err
+	}
+	now := s.Now().UTC()
+	expires := now.Add(ttl)
+	e, err := s.Store.CreateEnvironment(ctx, domain.Environment{
+		AppID: appID, Name: name, Type: domain.EnvEphemeral, Domain: host, TTL: ttl, ExpiresAt: &expires,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if errors.Is(err, domain.ErrConflict) {
+		return domain.Environment{}, domain.Conflictf("an environment named %s already exists", name)
+	}
+	return e, err
+}
+
+// Extend pushes an ephemeral environment's expiry to now plus its TTL.
+// Permanent environments are left alone.
+func (s *Service) Extend(ctx context.Context, id int64) (domain.Environment, error) {
+	e, err := s.Get(ctx, id)
+	if err != nil {
+		return domain.Environment{}, err
+	}
+	if e.Type != domain.EnvEphemeral {
+		return e, nil
+	}
+	expires := s.Now().UTC().Add(e.TTL)
+	if err := s.Store.SetExpiry(ctx, id, expires); err != nil {
+		return domain.Environment{}, err
+	}
+	e.ExpiresAt = &expires
+	return e, nil
+}
+
 // UpdateDomain changes the environment's domain; an empty domain unroutes it.
 func (s *Service) UpdateDomain(ctx context.Context, id int64, host string) (domain.Environment, error) {
 	e, err := s.Get(ctx, id)
 	if err != nil {
 		return domain.Environment{}, err
+	}
+	if e.Type == domain.EnvEphemeral {
+		return domain.Environment{}, domain.Invalid("domain", "ephemeral environments use their automatic domain")
 	}
 	e.Domain = normalizeDomain(host)
 	if err := domain.ValidateDomain(e.Domain); err != nil {

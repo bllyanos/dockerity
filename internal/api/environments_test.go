@@ -25,13 +25,16 @@ func TestEnvironmentsAPI(t *testing.T) {
 	if rec = bearer(h, http.MethodPatch, APIPrefix+"/environments/1", raw, `{"domain":"stg.shop.test"}`); !strings.Contains(rec.Body.String(), "stg.shop.test") {
 		t.Fatalf("update: %s", rec.Body)
 	}
+	if rec = bearer(h, http.MethodPost, APIPrefix+"/environments/1/extend", raw, ""); !strings.Contains(rec.Body.String(), `"expiresAt":"2030-01-01T00:00:00Z"`) {
+		t.Fatalf("extend: %s", rec.Body)
+	}
 	if rec = bearer(h, http.MethodGet, APIPrefix+"/environments/9", raw, ""); rec.Code != http.StatusNotFound {
 		t.Fatalf("missing: %d", rec.Code)
 	}
 	if rec = bearer(h, http.MethodDelete, APIPrefix+"/environments/1", raw, ""); rec.Code != http.StatusNoContent {
 		t.Fatalf("delete: %d", rec.Code)
 	}
-	want := []string{domain.AuditTokenUsed, domain.AuditEnvironmentCreated, domain.AuditEnvironmentUpdated, domain.AuditEnvironmentDeleted}
+	want := []string{domain.AuditTokenUsed, domain.AuditEnvironmentCreated, domain.AuditEnvironmentUpdated, domain.AuditEnvironmentExtended, domain.AuditEnvironmentDeleted}
 	if got := log.actions(); !slices.Equal(got, want) {
 		t.Fatalf("audit %v", got)
 	}

@@ -45,6 +45,10 @@ type Service struct {
 	Previewer interface {
 		Preview(ctx context.Context, d domain.Deployment) (executor.Preview, error)
 	}
+	// Extender, when set, pushes an ephemeral environment's expiry on every deploy.
+	Extender interface {
+		Extend(ctx context.Context, id int64) (domain.Environment, error)
+	}
 	// Backups tells when volumes were last backed up, for the warning.
 	Backups interface {
 		LatestBackup(ctx context.Context, volume string) (domain.Backup, error)
@@ -68,6 +72,11 @@ func (s *Service) Start(ctx context.Context, envID, buildID int64, actor *int64)
 	}
 	if err != nil {
 		return domain.Deployment{}, err
+	}
+	if s.Extender != nil {
+		if _, err := s.Extender.Extend(ctx, env.ID); err != nil {
+			return domain.Deployment{}, err
+		}
 	}
 	s.Runner.Submit(d.ID)
 	return d, nil
