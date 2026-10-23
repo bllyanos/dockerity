@@ -212,6 +212,24 @@ and the database, and they drive the reconciler.
 
 Secrets are never passed as build args. If a build needs a secret, use BuildKit secret mounts (later).
 
+**BuildKit through the Engine API (spike #65).** `POST /build?version=2` with a tar
+context works without a buildx session (Docker 29, Go SDK `ImageBuild` with
+`Version: BuilderBuildKit`). Findings:
+
+- Progress arrives as JSON messages `{"id":"moby.buildkit.trace","aux":"<base64>"}`. The
+  payload is a BuildKit `StatusResponse` protobuf: field 1 vertexes (digest, name,
+  cached, started, completed, error), field 3 logs (vertex, stream, msg). Dockerity
+  decodes just these fields with `google.golang.org/protobuf/encoding/protowire`
+  instead of importing the whole BuildKit module.
+- The result is `{"id":"moby.image.id","aux":{"ID":"sha256:..."}}`. Failures arrive as
+  `error` / `errorDetail` messages.
+- Rebuilding the same context reuses the cache: same image ID, about 0.6 s instead of
+  5.4 s for the first build.
+- The classic builder (`version=1`) still works and prints readable `stream` lines,
+  but it is deprecated, so it is not used.
+- Session features (secret mounts, SSH forwarding) would need a BuildKit session; out of
+  scope for now.
+
 ### 6.1.1 Git access with deploy keys
 
 Each app has its own deploy key:
