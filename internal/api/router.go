@@ -16,6 +16,8 @@ type Deps struct {
 	HealthChecks []HealthCheck
 	// UI is the built web app. When nil, no UI is served.
 	UI fs.FS
+	// Setup serves the first-run setup endpoints. When nil, they are not registered.
+	Setup SetupService
 }
 
 // NewRouter builds the top-level HTTP handler.
@@ -28,6 +30,9 @@ func NewRouter(d Deps) http.Handler {
 	}
 	apiMux := http.NewServeMux()
 	apiMux.HandleFunc("/", notFound)
+	if d.Setup != nil {
+		setupHandlers{logger: d.Logger, setup: d.Setup}.register(apiMux)
+	}
 	mux.Handle(APIPrefix+"/", http.StripPrefix(APIPrefix, apiMux))
 	// Unknown API paths must not fall through to the UI.
 	mux.HandleFunc("/api/", notFound)

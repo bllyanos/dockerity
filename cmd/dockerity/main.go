@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/bllyanos/dockerity/internal/api"
+	"github.com/bllyanos/dockerity/internal/auth"
+	"github.com/bllyanos/dockerity/internal/auth/password"
 	"github.com/bllyanos/dockerity/internal/config"
 	"github.com/bllyanos/dockerity/internal/dockerx"
 	"github.com/bllyanos/dockerity/internal/healthprobe"
@@ -62,6 +64,11 @@ func run(ctx context.Context) error {
 	router := api.NewRouter(api.Deps{
 		Logger: logger,
 		UI:     web.Dist(),
+		Setup: &auth.Setup{
+			Users:          sqlite.Users{DB: db},
+			PasswordParams: password.DefaultParams,
+			Now:            time.Now,
+		},
 		HealthChecks: []api.HealthCheck{
 			sqlite.HealthCheck{DB: db},
 			dockerx.HealthCheck{Docker: docker},
