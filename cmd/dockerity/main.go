@@ -33,10 +33,17 @@ func dispatch(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if len(args) > 0 && args[0] == "healthcheck" {
-		return healthcheck(ctx)
+	if len(args) == 0 {
+		return run(ctx)
 	}
-	return run(ctx)
+	switch args[0] {
+	case "healthcheck":
+		return healthcheck(ctx)
+	case "rotate-master-key":
+		return rotateMasterKey(ctx, args[1:], os.Stdout)
+	default:
+		return fmt.Errorf("unknown command %q (commands: healthcheck, rotate-master-key)", args[0])
+	}
 }
 
 func run(ctx context.Context) error {
