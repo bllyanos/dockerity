@@ -34,6 +34,9 @@ func TestAppsAPI(t *testing.T) {
 	if rec = bearer(h, http.MethodPost, APIPrefix+"/apps/1/deploy-key/regenerate", raw, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "-regenerated") {
 		t.Fatalf("regenerate: %d %s", rec.Code, rec.Body)
 	}
+	if rec = bearer(h, http.MethodPost, APIPrefix+"/apps/1/test-connection", raw, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"ok":true`) {
+		t.Fatalf("test connection: %d %s", rec.Code, rec.Body)
+	}
 	if rec = bearer(h, http.MethodGet, APIPrefix+"/apps/9", raw, ""); rec.Code != http.StatusNotFound {
 		t.Fatalf("missing: %d", rec.Code)
 	}

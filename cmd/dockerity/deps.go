@@ -11,6 +11,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/auth/password"
 	"github.com/bllyanos/dockerity/internal/deploykey"
 	"github.com/bllyanos/dockerity/internal/dockerx"
+	"github.com/bllyanos/dockerity/internal/gitx"
 	"github.com/bllyanos/dockerity/internal/secrets"
 	"github.com/bllyanos/dockerity/internal/store/sqlite"
 	"github.com/bllyanos/dockerity/web"
@@ -20,6 +21,8 @@ import (
 func buildDeps(logger *slog.Logger, db *sql.DB, docker *dockerx.Client, keyring *secrets.Keyring) api.Deps {
 	users := sqlite.Users{DB: db}
 	secretStore := &secrets.Builtin{Keys: keyring, Store: sqlite.SecretVersions{DB: db}, Now: time.Now}
+	deployKeys := deploykey.Store{Secrets: secretStore}
+	appService := &apps.Service{Store: sqlite.Apps{DB: db}, Keys: deployKeys, Now: time.Now}
 	return api.Deps{
 		Logger: logger,
 		UI:     web.Dist(),
@@ -33,10 +36,11 @@ func buildDeps(logger *slog.Logger, db *sql.DB, docker *dockerx.Client, keyring 
 			Now:            time.Now,
 		},
 		Audit: sqlite.AuditLog{DB: db},
-		Apps: &apps.Service{
-			Store: sqlite.Apps{DB: db},
-			Keys:  deploykey.Store{Secrets: secretStore},
-			Now:   time.Now,
+		Apps:  appService,
+		ConnectionTester: &apps.ConnectionTester{
+			Apps: appService,
+			Keys: deployKeys,
+			Git:  &gitx.Client{HostKeys: sqlite.KnownHosts{DB: db}, Now: time.Now},
 		},
 		Users: &auth.UserAdmin{
 			Users:          users,

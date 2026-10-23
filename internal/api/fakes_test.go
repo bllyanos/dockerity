@@ -220,3 +220,13 @@ func (f *fakeApps) RegenerateDeployKey(ctx context.Context, id int64) (domain.Ap
 	f.apps[id-1] = a
 	return a, nil
 }
+
+// fakeTester reports success for app 1 and not found otherwise.
+type fakeTester struct{}
+
+func (fakeTester) Test(_ context.Context, id int64) (apps.ConnectionResult, error) {
+	if id != 1 {
+		return apps.ConnectionResult{}, domain.ErrNotFound
+	}
+	return apps.ConnectionResult{OK: true, DefaultBranchExists: true, BranchCount: 3, Message: "connected"}, nil
+}
