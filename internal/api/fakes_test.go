@@ -12,6 +12,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/domain"
 	"github.com/bllyanos/dockerity/internal/environments"
 	"github.com/bllyanos/dockerity/internal/secrets"
+	"github.com/bllyanos/dockerity/internal/spawn"
 )
 
 var discardLogger = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -438,4 +439,16 @@ func (f *fakeEnvs) Extend(ctx context.Context, id int64) (domain.Environment, er
 	t := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 	e.ExpiresAt = &t
 	return e, nil
+}
+
+// fakeSpawn spawns into app 1 only.
+type fakeSpawn struct{ got spawn.Input }
+
+func (f *fakeSpawn) Spawn(_ context.Context, appID int64, in spawn.Input, _ *int64) (domain.Environment, domain.Deployment, error) {
+	if appID != 1 {
+		return domain.Environment{}, domain.Deployment{}, domain.ErrNotFound
+	}
+	f.got = in
+	return domain.Environment{ID: 7, AppID: 1, Name: "e-abc123", Type: domain.EnvEphemeral},
+		domain.Deployment{ID: 3, EnvID: 7, BuildID: in.BuildID}, nil
 }
