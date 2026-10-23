@@ -37,6 +37,7 @@ func buildDeps(logger *slog.Logger, db *sql.DB, docker *dockerx.Client, keyring 
 		},
 		Audit: sqlite.AuditLog{DB: db},
 		Apps:  appService,
+		Specs: &apps.Specs{Apps: appService, Store: sqlite.SpecVersions{DB: db}, Now: time.Now},
 		ConnectionTester: &apps.ConnectionTester{
 			Apps: appService,
 			Keys: deployKeys,

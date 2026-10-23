@@ -65,3 +65,12 @@ func ValidateBranch(b string) error {
 	}
 	return nil
 }
+
+// AppSpecVersion is one immutable saved version of an app's spec.
+type AppSpecVersion struct {
+	AppID     int64
+	Version   int
+	YAML      string
+	CreatedAt time.Time
+	CreatedBy *int64
+}
