@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/bllyanos/dockerity/internal/domain"
@@ -46,29 +45,10 @@ func (r Users) CreateUser(ctx context.Context, u domain.User) (domain.User, erro
 
 // SetUserDisabled disables the user at the given time, or enables them when at is nil.
 func (r Users) SetUserDisabled(ctx context.Context, id int64, at *time.Time) error {
-	return r.updateOne(ctx, `UPDATE users SET disabled_at = ? WHERE id = ?`, formatNullTime(at), id)
+	return execOne(ctx, r.DB, `UPDATE users SET disabled_at = ? WHERE id = ?`, formatNullTime(at), id)
 }
 
 // SetUserPassword replaces the password hash.
 func (r Users) SetUserPassword(ctx context.Context, id int64, hash string) error {
-	return r.updateOne(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, hash, id)
-}
-
-func (r Users) updateOne(ctx context.Context, query string, args ...any) error {
-	res, err := r.DB.ExecContext(ctx, query, args...)
-	if err != nil {
-		return err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return domain.ErrNotFound
-	}
-	return nil
-}
-
-func isUniqueViolation(err error) bool {
-	return strings.Contains(err.Error(), "UNIQUE constraint failed")
+	return execOne(ctx, r.DB, `UPDATE users SET password_hash = ? WHERE id = ?`, hash, id)
 }
