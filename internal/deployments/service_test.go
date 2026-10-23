@@ -6,8 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bllyanos/dockerity/internal/deploy/executor"
+	"github.com/bllyanos/dockerity/internal/deploy/planner"
 	"github.com/bllyanos/dockerity/internal/domain"
 	"github.com/bllyanos/dockerity/internal/secrets"
+	"github.com/bllyanos/dockerity/internal/spec"
 )
 
 type memStore struct{ deps []domain.Deployment }
@@ -117,5 +120,49 @@ func TestStartRejects(t *testing.T) {
 	}
 	if len(r.submitted) != 1 {
 		t.Fatal("rejected deployments must not be submitted")
+	}
+}
+
+type fakePreviewer struct{ got domain.Deployment }
+
+func (f *fakePreviewer) Preview(_ context.Context, d domain.Deployment) (executor.Preview, error) {
+	f.got = d
+	s, err := spec.Load([]byte("services:\n  db:\n    kind: stateful\n    image: mysql:9.1\n    volumes:\n      data: /d\n"))
+	if err != nil {
+		return executor.Preview{}, err
+	}
+	current := map[string]planner.Running{"db": {Image: "mysql:8.4"}}
+	plan, err := planner.Make(planner.Input{App: "shop", Env: "staging", Spec: s, Current: current})
+	return executor.Preview{Spec: s, Plan: plan, Current: current}, err
+}
+
+type latestBackups map[string]domain.Backup
+
+func (l latestBackups) LatestBackup(_ context.Context, volume string) (domain.Backup, error) {
+	if b, ok := l[volume]; ok {
+		return b, nil
+	}
+	return domain.Backup{}, domain.ErrNotFound
+}
+
+func TestPreview(t *testing.T) {
+	s, r := newService(3)
+	p := &fakePreviewer{}
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	s.Previewer, s.Backups = p, latestBackups{"dkt-shop-staging-db-data": {CreatedAt: at}}
+	w, err := s.Preview(context.Background(), 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.got.BuildID != 1 || p.got.SpecVersion != 4 || p.got.SecretVersion != 3 || len(r.submitted) != 0 {
+		t.Fatalf("draft %+v submitted %v", p.got, r.submitted)
+	}
+	if !w.Downtime || len(w.Services) != 1 || !w.Services[0].MajorChange || !w.Services[0].Backup ||
+		!w.Services[0].LastBackup["dkt-shop-staging-db-data"].Equal(at) {
+		t.Fatalf("warning %+v", w)
+	}
+	var ve *domain.ValidationError
+	if _, err := s.Preview(context.Background(), 1, 2); !errors.As(err, &ve) {
+		t.Fatalf("failed build: %v", err)
 	}
 }

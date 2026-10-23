@@ -46,3 +46,23 @@ export async function getDeployment(id: number): Promise<{ deployment: Deploymen
 export function followDeploymentLog(id: number, handlers: LogHandlers): () => void {
   return followLog(`/api/v1/deployments/${id}/logs`, handlers)
 }
+
+export type WarningService = {
+  name: string
+  strategy: string
+  downtime: boolean
+  oldImage: string
+  newImage: string
+  imageChanged: boolean
+  majorChange: boolean
+  backup: boolean
+  lastBackup: Record<string, string | null> | null
+  dependents: string[]
+}
+
+export type DeployWarning = { downtime: boolean; services: WarningService[] }
+
+/** Explains what deploying buildId would do, without doing it. */
+export async function previewDeployment(envId: number, buildId: number): Promise<DeployWarning> {
+  return (await api<{ warning: DeployWarning }>(`/environments/${envId}/deployments/preview`, { method: 'POST', body: { buildId } })).warning
+}

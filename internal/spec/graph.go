@@ -53,3 +53,31 @@ func DependencyOrder(s Spec) (order []string, cycle []string) {
 	}
 	return order, nil
 }
+
+// Dependents returns the services that depend on name, directly or through
+// other services, in source order.
+func Dependents(s Spec, name string) []string {
+	affected := map[string]bool{name: true}
+	for changed := true; changed; {
+		changed = false
+		for _, svc := range s.Services {
+			if affected[svc.Name] {
+				continue
+			}
+			for _, d := range svc.DependsOn {
+				if affected[d.Name] {
+					affected[svc.Name] = true
+					changed = true
+					break
+				}
+			}
+		}
+	}
+	var out []string
+	for _, svc := range s.Services {
+		if svc.Name != name && affected[svc.Name] {
+			out = append(out, svc.Name)
+		}
+	}
+	return out
+}

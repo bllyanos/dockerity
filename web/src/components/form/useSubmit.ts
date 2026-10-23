@@ -1,12 +1,11 @@
 import { useState, type FormEvent } from 'react'
 
-/** Wraps an async form action with pending and error state. */
+/** Wraps an async action with pending and error state, for forms (onSubmit) or buttons (run). */
 export function useSubmit(action: () => Promise<void>) {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
+  async function run() {
     setPending(true)
     setError(null)
     try {
@@ -18,5 +17,10 @@ export function useSubmit(action: () => Promise<void>) {
     }
   }
 
-  return { pending, error, onSubmit }
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    await run()
+  }
+
+  return { pending, error, onSubmit, run }
 }

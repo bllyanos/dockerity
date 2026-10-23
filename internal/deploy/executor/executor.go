@@ -105,27 +105,65 @@ func (e *Executor) fail(id int64, cause error) {
 	}
 }
 
-// prepare loads the inputs, builds container specs and plans the steps.
+// prepare plans a stored deployment and records its steps.
 func (e *Executor) prepare(ctx context.Context, id int64, logs io.Writer) (*job, error) {
 	dep, err := e.Store.GetDeployment(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	env, err := e.Envs.Get(ctx, dep.EnvID)
+	j, _, err := e.plan(ctx, dep)
 	if err != nil {
 		return nil, err
+	}
+	planned := make([]domain.DeploymentStep, len(j.plan.Steps))
+	for i, st := range j.plan.Steps {
+		planned[i] = domain.DeploymentStep{Kind: string(st.Kind), Service: st.Service}
+	}
+	if j.steps, err = e.Store.InsertSteps(ctx, id, planned); err != nil {
+		return nil, err
+	}
+	_, _ = fmt.Fprintf(logs, "Deploying build #%d with spec v%d and secrets v%d to %s/%s (%d steps)\n",
+		dep.BuildID, dep.SpecVersion, dep.SecretVersion, j.env.AppName, j.env.Name, len(j.steps))
+	if j.plan.Downtime() {
+		_, _ = fmt.Fprintln(logs, "Warning: this deployment causes downtime for at least one service.")
+	}
+	return j, nil
+}
+
+// Preview is a plan computed without deploying.
+type Preview struct {
+	Env     domain.Environment
+	Spec    spec.Spec
+	Plan    planner.Plan
+	Current map[string]planner.Running
+}
+
+// Preview plans d (which need not be stored) against what runs now.
+func (e *Executor) Preview(ctx context.Context, d domain.Deployment) (Preview, error) {
+	j, current, err := e.plan(ctx, d)
+	if err != nil {
+		return Preview{}, err
+	}
+	return Preview{Env: j.env, Spec: j.spec, Plan: j.plan, Current: current}, nil
+}
+
+// plan loads the inputs of d, builds container specs and plans the steps.
+func (e *Executor) plan(ctx context.Context, dep domain.Deployment) (*job, map[string]planner.Running, error) {
+	env, err := e.Envs.Get(ctx, dep.EnvID)
+	if err != nil {
+		return nil, nil, err
 	}
 	sv, err := e.Specs.Get(ctx, env.AppID, dep.SpecVersion)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	s, err := spec.Load([]byte(sv.YAML))
 	if err != nil {
-		return nil, fmt.Errorf("spec v%d is invalid: %w", sv.Version, err)
+		return nil, nil, fmt.Errorf("spec v%d is invalid: %w", sv.Version, err)
 	}
 	images, err := e.Builds.ListBuildImages(ctx, dep.BuildID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	buildImages := map[string]string{}
 	for _, img := range images {
@@ -134,12 +172,12 @@ func (e *Executor) prepare(ctx context.Context, id int64, logs io.Writer) (*job,
 	values := map[string]string{}
 	if dep.SecretVersion > 0 {
 		if values, err = e.Secrets.Values(ctx, secrets.EnvScope(env.ID), dep.SecretVersion); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	current, err := e.current(ctx, env)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	j := &job{dep: dep, env: env, spec: s, containers: map[string]containerspec.Spec{}, excluded: map[string]bool{}}
@@ -154,7 +192,7 @@ func (e *Executor) prepare(ctx context.Context, id int64, logs io.Writer) (*job,
 			Service: svc, Image: image, Secrets: values,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("service %s: %w", svc.Name, err)
+			return nil, nil, fmt.Errorf("service %s: %w", svc.Name, err)
 		}
 		j.containers[svc.Name] = cs
 		fingerprints[svc.Name] = cs.Fingerprint()
@@ -164,21 +202,9 @@ func (e *Executor) prepare(ctx context.Context, id int64, logs io.Writer) (*job,
 		SecretNames: secrets.SortedKeys(values), Fingerprints: fingerprints, Current: current,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	planned := make([]domain.DeploymentStep, len(j.plan.Steps))
-	for i, st := range j.plan.Steps {
-		planned[i] = domain.DeploymentStep{Kind: string(st.Kind), Service: st.Service}
-	}
-	if j.steps, err = e.Store.InsertSteps(ctx, id, planned); err != nil {
-		return nil, err
-	}
-	_, _ = fmt.Fprintf(logs, "Deploying build #%d with spec v%d and secrets v%d to %s/%s (%d steps)\n",
-		dep.BuildID, dep.SpecVersion, dep.SecretVersion, env.AppName, env.Name, len(j.steps))
-	if j.plan.Downtime() {
-		_, _ = fmt.Fprintln(logs, "Warning: this deployment causes downtime for at least one service.")
-	}
-	return j, nil
+	return j, current, nil
 }
 
 // current reports what runs now in the environment, by service.

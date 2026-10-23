@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { listBuilds } from '../../api/builds'
-import { listDeployments, startDeployment } from '../../api/deployments'
+import { listDeployments, previewDeployment, startDeployment, type DeployWarning } from '../../api/deployments'
 import { StatusBadge } from '../../components/StatusBadge'
 import { Cell, Table } from '../../components/Table'
 import { Button } from '../../components/form/Button'
@@ -9,6 +9,7 @@ import { ErrorMessage } from '../../components/form/ErrorMessage'
 import { useSubmit } from '../../components/form/useSubmit'
 import { formatDateTime } from '../../lib/format'
 import { useLoad } from '../../lib/useLoad'
+import { DowntimeWarning } from './DowntimeWarning'
 
 type Props = { envId: number; appId: number }
 
@@ -22,10 +23,25 @@ export function DeploymentsPanel({ envId, appId }: Props) {
   const [buildId, setBuildId] = useState<number | null>(null)
   const selected = buildId ?? builds.data?.[0]?.id ?? null
 
+  const [warning, setWarning] = useState<DeployWarning | null>(null)
+
+  async function start(buildId: number) {
+    const d = await startDeployment(envId, buildId)
+    navigate(`/deployments/${d.id}`)
+  }
+
+  // Preview first; ask for confirmation only when the plan has downtime.
   const deploy = useSubmit(async () => {
     if (selected === null) throw new Error('Pick a build to deploy')
-    const d = await startDeployment(envId, selected)
-    navigate(`/deployments/${d.id}`)
+    const w = await previewDeployment(envId, selected)
+    if (w.downtime) {
+      setWarning(w)
+      return
+    }
+    await start(selected)
+  })
+  const confirm = useSubmit(async () => {
+    if (selected !== null) await start(selected)
   })
 
   const current = deployments.data?.find((d) => d.current)
@@ -51,7 +67,12 @@ export function DeploymentsPanel({ envId, appId }: Props) {
         <Button type="submit" disabled={deploy.pending || selected === null}>Deploy</Button>
         {builds.data?.length === 0 && <span className="text-sm text-slate-500">No succeeded builds yet.</span>}
       </form>
-      <ErrorMessage error={deploy.error ?? builds.error ?? deployments.error} />
+      {warning && (
+        <DowntimeWarning warning={warning} pending={confirm.pending}
+          onConfirm={() => void confirm.run()}
+          onCancel={() => setWarning(null)} />
+      )}
+      <ErrorMessage error={deploy.error ?? confirm.error ?? builds.error ?? deployments.error} />
       {deployments.data && deployments.data.length > 0 && (
         <Table headers={['#', 'Status', 'Build', 'Spec', 'Secrets', 'Started']}>
           {deployments.data.map((d) => (

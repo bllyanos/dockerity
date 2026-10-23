@@ -8,6 +8,7 @@ import (
 
 	"github.com/bllyanos/dockerity/internal/apps"
 	"github.com/bllyanos/dockerity/internal/auth"
+	"github.com/bllyanos/dockerity/internal/deploy/warning"
 	"github.com/bllyanos/dockerity/internal/domain"
 	"github.com/bllyanos/dockerity/internal/environments"
 	"github.com/bllyanos/dockerity/internal/secrets"
@@ -409,4 +410,11 @@ func (f *fakeBackups) Restore(_ context.Context, id int64) (domain.Backup, error
 		}
 	}
 	return domain.Backup{}, domain.ErrNotFound
+}
+
+func (f *fakeDeployments) Preview(_ context.Context, _, buildID int64) (warning.Warning, error) {
+	if buildID == 0 {
+		return warning.Warning{}, domain.Invalid("buildId", "required")
+	}
+	return warning.Warning{Downtime: true, Services: []warning.Service{{Name: "db", Downtime: true, MajorChange: true, Backup: true, Dependents: []string{"api"}}}}, nil
 }

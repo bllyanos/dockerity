@@ -35,3 +35,16 @@ func TestDeploymentsAPI(t *testing.T) {
 		t.Fatalf("audit %v", got)
 	}
 }
+
+func TestDeploymentPreviewAPI(t *testing.T) {
+	d := fullDeps()
+	h := NewRouter(d)
+	raw, _, _ := d.Tokens.(*fakeTokens).Create(t.Context(), alice, "t")
+	rec := bearer(h, http.MethodPost, APIPrefix+"/environments/1/deployments/preview", raw, `{"buildId":5}`)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"majorChange":true`) || !strings.Contains(rec.Body.String(), `"dependents":["api"]`) {
+		t.Fatalf("preview: %d %s", rec.Code, rec.Body)
+	}
+	if rec = bearer(h, http.MethodPost, APIPrefix+"/environments/1/deployments/preview", raw, `{}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing build: %d", rec.Code)
+	}
+}
