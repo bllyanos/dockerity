@@ -2,7 +2,6 @@ package secrets
 
 import (
 	"fmt"
-	"regexp"
 	"slices"
 
 	"github.com/bllyanos/dockerity/internal/domain"
@@ -10,20 +9,13 @@ import (
 
 // Limits keep secret sets small enough to load per deploy.
 const (
-	MaxKeyLength   = 128
+	MaxKeyLength   = domain.MaxSecretKeyLength
 	MaxValueLength = 64 * 1024
 	MaxKeys        = 500
 )
 
-var keyPattern = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
-
 // ValidateKey checks that name can be used as an environment variable.
-func ValidateKey(name string) error {
-	if len(name) > MaxKeyLength || !keyPattern.MatchString(name) {
-		return domain.Invalid("key", "%q must be uppercase letters, digits and '_', not starting with a digit, at most %d characters", name, MaxKeyLength)
-	}
-	return nil
-}
+func ValidateKey(name string) error { return domain.ValidateSecretKey(name) }
 
 // Changes is an edit of a secret set: keys to set and keys to remove.
 type Changes struct {
