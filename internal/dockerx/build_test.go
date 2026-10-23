@@ -67,9 +67,15 @@ func TestBuildImageWithDocker(t *testing.T) {
 	tag = strings.ReplaceAll(tag, ".", "")
 	t.Cleanup(func() { _ = c.RemoveImage(context.Background(), tag) })
 
+	// Unique content so the first build never hits a cache left by an earlier run.
+	marker := "hello from dockerity " + time.Now().Format(time.RFC3339Nano)
 	files := map[string]string{
 		"Dockerfile": "FROM busybox:1.37\nARG GREETING\nCOPY hello.txt /hello.txt\nRUN echo \"$GREETING\" && cat /hello.txt\n",
-		"hello.txt":  "hello from dockerity\n",
+		"hello.txt":  marker + "\n",
+	}
+	var pullLogs bytes.Buffer
+	if err := c.PullImage(ctx, "busybox:1.37", &pullLogs); err != nil {
+		t.Fatalf("pull: %v\n%s", err, pullLogs.String())
 	}
 	build := func() (string, string) {
 		var logs bytes.Buffer
@@ -84,7 +90,7 @@ func TestBuildImageWithDocker(t *testing.T) {
 	}
 
 	first, logs := build()
-	if !strings.Contains(logs, "hello from dockerity") {
+	if !strings.Contains(logs, marker) {
 		t.Fatalf("RUN output missing:\n%s", logs)
 	}
 	second, logs := build()
