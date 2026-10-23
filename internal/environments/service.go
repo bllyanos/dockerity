@@ -33,6 +33,10 @@ type Service struct {
 	Runtime interface {
 		Remove(ctx context.Context, app, env string) error
 	}
+	// Routes, when set, rewrites the environment's routes after a domain change.
+	Routes interface {
+		RebuildRoutes(ctx context.Context, envID int64) error
+	}
 	Now func() time.Time
 }
 
@@ -91,6 +95,11 @@ func (s *Service) UpdateDomain(ctx context.Context, id int64, host string) (doma
 			return domain.Environment{}, domain.Conflictf("domain %s is used by another environment", e.Domain)
 		}
 		return domain.Environment{}, err
+	}
+	if s.Routes != nil {
+		if err := s.Routes.RebuildRoutes(ctx, e.ID); err != nil {
+			return domain.Environment{}, err
+		}
 	}
 	return e, nil
 }
