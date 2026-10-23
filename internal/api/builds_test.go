@@ -14,10 +14,10 @@ import (
 	"github.com/bllyanos/dockerity/internal/domain"
 )
 
-func buildsRouter(t *testing.T) (http.Handler, string, *fakeBuilds, BuildLogs, *fakeAudit) {
+func buildsRouter(t *testing.T) (http.Handler, string, *fakeBuilds, LogSource, *fakeAudit) {
 	t.Helper()
 	d := fullDeps()
-	logs := BuildLogs{Store: buildlog.Store{Dir: t.TempDir()}, Hub: buildlog.NewHub()}
+	logs := LogSource{Store: buildlog.Store{Dir: t.TempDir()}, Hub: buildlog.NewHub()}
 	d.BuildLogs = logs
 	raw, _, _ := d.Tokens.(*fakeTokens).Create(t.Context(), alice, "t")
 	return NewRouter(d), raw, d.Builds.(*fakeBuilds), logs, d.Audit.(*fakeAudit)

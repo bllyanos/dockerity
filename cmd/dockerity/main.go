@@ -75,6 +75,10 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("build runner: %w", err)
 	}
 	defer svc.buildRunner.Wait()
+	if err := svc.deployRunner.Start(ctx); err != nil {
+		return fmt.Errorf("deploy runner: %w", err)
+	}
+	defer svc.deployRunner.Wait()
 
 	router := api.NewRouter(svc.apiDeps())
 	return httpserver.Run(ctx, logger, cfg.ListenAddr, router)
