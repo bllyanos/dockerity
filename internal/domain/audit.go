@@ -30,3 +30,6 @@ type AuditEvent struct {
 
 // AuditSecretsUpdated records a new secret set version (key names only).
 const AuditSecretsUpdated = "secrets.updated"
+
+// AuditSettingsUpdated records a change of instance settings.
+const AuditSettingsUpdated = "settings.updated"

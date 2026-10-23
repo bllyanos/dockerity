@@ -11,11 +11,12 @@ import (
 	"github.com/bllyanos/dockerity/internal/auth/ratelimit"
 	"github.com/bllyanos/dockerity/internal/domain"
 	"github.com/bllyanos/dockerity/internal/envsecrets"
+	"github.com/bllyanos/dockerity/internal/settings"
 )
 
 func fullDeps() Deps {
 	return Deps{Logger: discardLogger, Setup: &fakeSetup{}, Sessions: newFakeSessions(), Tokens: newFakeTokens(), Audit: &fakeAudit{},
-		Users: &fakeUserAdmin{users: []domain.User{alice}}, Apps: &fakeApps{}, ConnectionTester: fakeTester{}, Builds: &fakeBuilds{}, Environments: &fakeEnvs{}, Deployments: &fakeDeployments{}, EnvContainers: fakeEnvContainers{}, Backups: &fakeBackups{},
+		Users: &fakeUserAdmin{users: []domain.User{alice}}, Apps: &fakeApps{}, ConnectionTester: fakeTester{}, Builds: &fakeBuilds{}, Environments: &fakeEnvs{}, Deployments: &fakeDeployments{}, EnvContainers: fakeEnvContainers{}, Backups: &fakeBackups{}, Settings: &settings.Service{Store: memSettings{}, Now: time.Now},
 		EnvSecrets: &envsecrets.Service{Envs: &fakeEnvs{}, Secrets: newMemSecretStore()},
 		Specs:      &apps.Specs{Apps: &fakeApps{}, Store: &memSpecStore{}, Now: time.Now}}
 }
