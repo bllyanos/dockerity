@@ -17,6 +17,7 @@ type AppService interface {
 	Create(ctx context.Context, in apps.CreateInput) (domain.App, error)
 	Update(ctx context.Context, id int64, in apps.UpdateInput) (domain.App, error)
 	Delete(ctx context.Context, id int64) (domain.App, error)
+	RegenerateDeployKey(ctx context.Context, id int64) (domain.App, error)
 }
 
 type appHandlers struct {
@@ -31,6 +32,7 @@ func (h appHandlers) register(rt *routes) {
 	rt.handle("GET /apps/{id}", h.get)
 	rt.handle("PATCH /apps/{id}", h.update)
 	rt.handle("DELETE /apps/{id}", h.delete)
+	rt.handle("POST /apps/{id}/deploy-key/regenerate", h.regenerateKey)
 }
 
 type appView struct {
@@ -135,4 +137,18 @@ func (h appHandlers) delete(w http.ResponseWriter, r *http.Request) {
 	}
 	h.audit.record(r, appEvent(domain.AuditAppDeleted, a))
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h appHandlers) regenerateKey(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	a, err := h.apps.RegenerateDeployKey(r.Context(), id)
+	if err != nil {
+		writeServiceError(w, r, h.logger, err)
+		return
+	}
+	h.audit.record(r, appEvent(domain.AuditAppDeployKeyRegenerated, a))
+	writeJSON(w, http.StatusOK, map[string]appView{"app": toAppView(a)})
 }

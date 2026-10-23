@@ -31,6 +31,9 @@ func TestAppsAPI(t *testing.T) {
 	if rec = bearer(h, http.MethodPatch, APIPrefix+"/apps/1", raw, `{"defaultBranch":"develop"}`); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"develop"`) {
 		t.Fatalf("update: %d %s", rec.Code, rec.Body)
 	}
+	if rec = bearer(h, http.MethodPost, APIPrefix+"/apps/1/deploy-key/regenerate", raw, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "-regenerated") {
+		t.Fatalf("regenerate: %d %s", rec.Code, rec.Body)
+	}
 	if rec = bearer(h, http.MethodGet, APIPrefix+"/apps/9", raw, ""); rec.Code != http.StatusNotFound {
 		t.Fatalf("missing: %d", rec.Code)
 	}
@@ -38,7 +41,7 @@ func TestAppsAPI(t *testing.T) {
 		t.Fatalf("delete: %d", rec.Code)
 	}
 
-	want := []string{domain.AuditTokenUsed, domain.AuditAppCreated, domain.AuditAppUpdated, domain.AuditAppDeleted}
+	want := []string{domain.AuditTokenUsed, domain.AuditAppCreated, domain.AuditAppUpdated, domain.AuditAppDeployKeyRegenerated, domain.AuditAppDeleted}
 	if got := log.actions(); !slices.Equal(got, want) {
 		t.Fatalf("audit %v, want %v", got, want)
 	}

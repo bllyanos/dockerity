@@ -9,14 +9,17 @@ import (
 	"github.com/bllyanos/dockerity/internal/apps"
 	"github.com/bllyanos/dockerity/internal/auth"
 	"github.com/bllyanos/dockerity/internal/auth/password"
+	"github.com/bllyanos/dockerity/internal/deploykey"
 	"github.com/bllyanos/dockerity/internal/dockerx"
+	"github.com/bllyanos/dockerity/internal/secrets"
 	"github.com/bllyanos/dockerity/internal/store/sqlite"
 	"github.com/bllyanos/dockerity/web"
 )
 
 // buildDeps assembles the services behind the HTTP API.
-func buildDeps(logger *slog.Logger, db *sql.DB, docker *dockerx.Client) api.Deps {
+func buildDeps(logger *slog.Logger, db *sql.DB, docker *dockerx.Client, keyring *secrets.Keyring) api.Deps {
 	users := sqlite.Users{DB: db}
+	secretStore := &secrets.Builtin{Keys: keyring, Store: sqlite.SecretVersions{DB: db}, Now: time.Now}
 	return api.Deps{
 		Logger: logger,
 		UI:     web.Dist(),
@@ -30,7 +33,11 @@ func buildDeps(logger *slog.Logger, db *sql.DB, docker *dockerx.Client) api.Deps
 			Now:            time.Now,
 		},
 		Audit: sqlite.AuditLog{DB: db},
-		Apps:  &apps.Service{Store: sqlite.Apps{DB: db}, Now: time.Now},
+		Apps: &apps.Service{
+			Store: sqlite.Apps{DB: db},
+			Keys:  deploykey.Store{Secrets: secretStore},
+			Now:   time.Now,
+		},
 		Users: &auth.UserAdmin{
 			Users:          users,
 			Credentials:    credentials{sqlite.Sessions{DB: db}, sqlite.APITokens{DB: db}},

@@ -59,7 +59,8 @@ func run(ctx context.Context) error {
 	}
 	defer db.Close()
 
-	if _, err := openKeyring(ctx, logger, cfg.MasterKeyFile, db); err != nil {
+	keyring, err := openKeyring(ctx, logger, cfg.MasterKeyFile, db)
+	if err != nil {
 		return err
 	}
 
@@ -69,7 +70,7 @@ func run(ctx context.Context) error {
 	}
 	defer docker.Close()
 
-	router := api.NewRouter(buildDeps(logger, db, docker))
+	router := api.NewRouter(buildDeps(logger, db, docker, keyring))
 	return httpserver.Run(ctx, logger, cfg.ListenAddr, router)
 }
 
