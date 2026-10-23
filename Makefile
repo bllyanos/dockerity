@@ -1,4 +1,5 @@
 BIN := bin/dockerity
+GOLANGCI_LINT ?= golangci-lint
 
 .PHONY: build build-go web web-deps test lint lint-go lint-web run clean
 
@@ -19,8 +20,7 @@ test:
 lint: lint-go lint-web
 
 lint-go:
-	go vet ./...
-	@test -z "$$(gofmt -l .)" || (gofmt -l . && echo "gofmt: files need formatting" && exit 1)
+	$(GOLANGCI_LINT) run ./...
 
 lint-web:
 	cd web && npm run lint
