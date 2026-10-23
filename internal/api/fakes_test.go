@@ -429,3 +429,13 @@ func (m memSettings) SaveSettings(_ context.Context, v map[string]string, _ time
 	}
 	return nil
 }
+
+func (f *fakeEnvs) Extend(ctx context.Context, id int64) (domain.Environment, error) {
+	e, err := f.Get(ctx, id)
+	if err != nil {
+		return e, err
+	}
+	t := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	e.ExpiresAt = &t
+	return e, nil
+}

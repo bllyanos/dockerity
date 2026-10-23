@@ -64,6 +64,7 @@ func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *doc
 		Apps:        s.apps,
 		Deployments: sqlite.Deployments{DB: db},
 		Runtime:     executor.Teardown{Docker: docker, Routes: s.routes},
+		Settings:    s.settings,
 		Now:         time.Now,
 	}
 	s.git = &gitx.Client{HostKeys: sqlite.KnownHosts{DB: db}, Now: time.Now}
@@ -146,6 +147,7 @@ func (s *services) apiDeps() api.Deps {
 			Secrets:   s.secrets,
 			Runner:    s.deployRunner,
 			Previewer: s.deployRunner.Exec,
+			Extender:  s.envs,
 			Backups:   sqlite.Backups{DB: db},
 			Now:       time.Now,
 		},

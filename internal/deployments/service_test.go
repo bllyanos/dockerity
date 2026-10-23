@@ -166,3 +166,22 @@ func TestPreview(t *testing.T) {
 		t.Fatalf("failed build: %v", err)
 	}
 }
+
+type extender struct{ ids []int64 }
+
+func (e *extender) Extend(_ context.Context, id int64) (domain.Environment, error) {
+	e.ids = append(e.ids, id)
+	return domain.Environment{}, nil
+}
+
+func TestStartExtendsTheEnvironment(t *testing.T) {
+	s, _ := newService(0)
+	ext := &extender{}
+	s.Extender = ext
+	if _, err := s.Start(context.Background(), 1, 1, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(ext.ids) != 1 || ext.ids[0] != 1 {
+		t.Fatalf("extended %v", ext.ids)
+	}
+}
