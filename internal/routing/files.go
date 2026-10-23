@@ -52,3 +52,16 @@ func (f Files) Remove(app, env string) error {
 	}
 	return err
 }
+
+// Routed returns the container names listed as servers in the environment's
+// file. A missing file means nothing is routed.
+func (f Files) Routed(app, env string) (map[string]bool, error) {
+	data, err := os.ReadFile(f.path(app, env))
+	if errors.Is(err, fs.ErrNotExist) {
+		return map[string]bool{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return RoutedContainers(data)
+}

@@ -9,6 +9,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/apps"
 	"github.com/bllyanos/dockerity/internal/auth"
 	"github.com/bllyanos/dockerity/internal/domain"
+	"github.com/bllyanos/dockerity/internal/environments"
 	"github.com/bllyanos/dockerity/internal/secrets"
 )
 
@@ -372,4 +373,17 @@ func (f *fakeDeployments) Get(_ context.Context, id int64) (domain.Deployment, [
 		return domain.Deployment{}, nil, domain.ErrNotFound
 	}
 	return f.deps[id-1], []domain.DeploymentStep{{Position: 1, Kind: "ensure_network", Status: domain.StepSucceeded}}, nil
+}
+
+// fakeEnvContainers returns two web versions during a switch.
+type fakeEnvContainers struct{}
+
+func (fakeEnvContainers) List(_ context.Context, envID int64) ([]environments.Container, error) {
+	if envID != 1 {
+		return nil, domain.ErrNotFound
+	}
+	return []environments.Container{
+		{Name: "dkt-shop-prod-web-d1", Service: "web", Deployment: "1", Running: true, Routed: false},
+		{Name: "dkt-shop-prod-web-d2", Service: "web", Deployment: "2", Running: true, Routed: true},
+	}, nil
 }

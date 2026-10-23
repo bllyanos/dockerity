@@ -45,10 +45,11 @@ type services struct {
 	deployLogs   buildlog.Store
 	deployHub    *buildlog.Hub
 	deployRunner *executor.Runner
+	routes       routing.Files
 }
 
 func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *dockerx.Client, keyring *secrets.Keyring) *services {
-	s := &services{logger: logger, db: db, docker: docker, users: sqlite.Users{DB: db}}
+	s := &services{logger: logger, db: db, docker: docker, users: sqlite.Users{DB: db}, routes: routing.Files{Dir: cfg.TraefikDir}}
 	s.secrets = &secrets.Builtin{Keys: keyring, Store: sqlite.SecretVersions{DB: db}, Now: time.Now}
 	s.deployKeys = deploykey.Store{Secrets: s.secrets}
 	s.apps = &apps.Service{Store: sqlite.Apps{DB: db}, Keys: s.deployKeys, Now: time.Now}
@@ -57,7 +58,7 @@ func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *doc
 		Store:       sqlite.Environments{DB: db},
 		Apps:        s.apps,
 		Deployments: sqlite.Deployments{DB: db},
-		Runtime:     executor.Teardown{Docker: docker, Routes: routing.Files{Dir: cfg.TraefikDir}},
+		Runtime:     executor.Teardown{Docker: docker, Routes: s.routes},
 		Now:         time.Now,
 	}
 	s.git = &gitx.Client{HostKeys: sqlite.KnownHosts{DB: db}, Now: time.Now}
@@ -88,7 +89,7 @@ func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *doc
 		Logs:    s.deployLogs,
 		Hub:     s.deployHub,
 		Routing: routing.DefaultOptions,
-		Routes:  routing.Files{Dir: cfg.TraefikDir},
+		Routes:  s.routes,
 		AllEnvs: sqlite.Environments{DB: db},
 		Logger:  logger.With("component", "deploy"),
 		Now:     time.Now,
@@ -133,6 +134,7 @@ func (s *services) apiDeps() api.Deps {
 		},
 		DeploymentLogs: api.LogSource{Store: s.deployLogs, Hub: s.deployHub},
 		Environments:   s.envs,
+		EnvContainers:  &environments.Containers{Envs: s.envs, Docker: s.docker, Routes: s.routes},
 		EnvSecrets:     &envsecrets.Service{Envs: s.envs, Secrets: s.secrets},
 		ConnectionTester: &apps.ConnectionTester{
 			Apps: s.apps,

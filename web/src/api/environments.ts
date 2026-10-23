@@ -30,3 +30,16 @@ export async function updateEnvironmentDomain(id: number, domain: string): Promi
 export async function deleteEnvironment(id: number): Promise<void> {
   await api<void>(`/environments/${id}`, { method: 'DELETE' })
 }
+
+export type EnvContainer = {
+  name: string
+  service: string
+  deployment: string
+  image: string
+  running: boolean
+  routed: boolean
+}
+
+export async function listEnvContainers(id: number): Promise<EnvContainer[]> {
+  return (await api<{ containers: EnvContainer[] }>(`/environments/${id}/containers`)).containers
+}
