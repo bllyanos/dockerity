@@ -10,12 +10,14 @@ import (
 	"github.com/bllyanos/dockerity/internal/apps"
 	"github.com/bllyanos/dockerity/internal/auth/ratelimit"
 	"github.com/bllyanos/dockerity/internal/domain"
+	"github.com/bllyanos/dockerity/internal/envsecrets"
 )
 
 func fullDeps() Deps {
 	return Deps{Logger: discardLogger, Setup: &fakeSetup{}, Sessions: newFakeSessions(), Tokens: newFakeTokens(), Audit: &fakeAudit{},
 		Users: &fakeUserAdmin{users: []domain.User{alice}}, Apps: &fakeApps{}, ConnectionTester: fakeTester{}, Builds: &fakeBuilds{}, Environments: &fakeEnvs{},
-		Specs: &apps.Specs{Apps: &fakeApps{}, Store: &memSpecStore{}, Now: time.Now}}
+		EnvSecrets: &envsecrets.Service{Envs: &fakeEnvs{}, Secrets: newMemSecretStore()},
+		Specs:      &apps.Specs{Apps: &fakeApps{}, Store: &memSpecStore{}, Now: time.Now}}
 }
 
 // concretePath turns a mux pattern like "DELETE /tokens/{id}" into a method and path.

@@ -33,6 +33,8 @@ type Deps struct {
 	Specs SpecService
 	// Environments manages environments. When nil, environment routes are not registered.
 	Environments EnvironmentService
+	// EnvSecrets manages environment secrets. When nil, secret routes are not registered.
+	EnvSecrets EnvSecretService
 	// Builds triggers and reads builds. When nil, build routes are not registered.
 	Builds BuildService
 	// BuildLogs serves persisted and live build logs.
@@ -95,6 +97,9 @@ func apiRoutes(d Deps) *routes {
 	}
 	if d.Environments != nil {
 		environmentHandlers{logger: d.Logger, envs: d.Environments, audit: aud}.register(rt)
+	}
+	if d.EnvSecrets != nil {
+		envSecretHandlers{logger: d.Logger, secrets: d.EnvSecrets, audit: aud}.register(rt)
 	}
 	if d.Builds != nil {
 		buildHandlers{logger: d.Logger, builds: d.Builds, logs: d.BuildLogs, audit: aud}.register(rt)

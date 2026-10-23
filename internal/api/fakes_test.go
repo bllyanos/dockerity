@@ -9,6 +9,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/apps"
 	"github.com/bllyanos/dockerity/internal/auth"
 	"github.com/bllyanos/dockerity/internal/domain"
+	"github.com/bllyanos/dockerity/internal/secrets"
 )
 
 var discardLogger = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -304,4 +305,46 @@ func (f *fakeEnvs) UpdateDomain(ctx context.Context, id int64, host string) (dom
 
 func (f *fakeEnvs) Delete(ctx context.Context, id int64) (domain.Environment, error) {
 	return f.Get(ctx, id)
+}
+
+// memSecretStore is an in-memory secrets.SecretStore.
+type memSecretStore struct {
+	versions map[secrets.Scope][]map[string]string
+}
+
+func newMemSecretStore() *memSecretStore {
+	return &memSecretStore{versions: map[secrets.Scope][]map[string]string{}}
+}
+
+func (m *memSecretStore) Update(_ context.Context, s secrets.Scope, c secrets.Changes, _ *int64) (secrets.Version, error) {
+	cur := map[string]string{}
+	if vs := m.versions[s]; len(vs) > 0 {
+		cur = vs[len(vs)-1]
+	}
+	next, err := c.Apply(cur)
+	if err != nil {
+		return secrets.Version{}, err
+	}
+	m.versions[s] = append(m.versions[s], next)
+	return secrets.Version{Scope: s, Version: len(m.versions[s]), Keys: secrets.SortedKeys(next)}, nil
+}
+
+func (m *memSecretStore) Latest(_ context.Context, s secrets.Scope) (secrets.Version, error) {
+	vs := m.versions[s]
+	if len(vs) == 0 {
+		return secrets.Version{}, domain.ErrNotFound
+	}
+	return secrets.Version{Scope: s, Version: len(vs), Keys: secrets.SortedKeys(vs[len(vs)-1])}, nil
+}
+
+func (m *memSecretStore) Versions(_ context.Context, s secrets.Scope) ([]secrets.Version, error) {
+	var out []secrets.Version
+	for i := len(m.versions[s]) - 1; i >= 0; i-- {
+		out = append(out, secrets.Version{Scope: s, Version: i + 1, Keys: secrets.SortedKeys(m.versions[s][i])})
+	}
+	return out, nil
+}
+
+func (m *memSecretStore) Values(_ context.Context, s secrets.Scope, v int) (map[string]string, error) {
+	return m.versions[s][v-1], nil
 }

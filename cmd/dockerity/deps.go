@@ -16,6 +16,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/deploykey"
 	"github.com/bllyanos/dockerity/internal/dockerx"
 	"github.com/bllyanos/dockerity/internal/environments"
+	"github.com/bllyanos/dockerity/internal/envsecrets"
 	"github.com/bllyanos/dockerity/internal/gitx"
 	"github.com/bllyanos/dockerity/internal/secrets"
 	"github.com/bllyanos/dockerity/internal/store/sqlite"
@@ -31,6 +32,8 @@ type services struct {
 	users       sqlite.Users
 	apps        *apps.Service
 	specs       *apps.Specs
+	secrets     secrets.SecretStore
+	envs        *environments.Service
 	deployKeys  deploykey.Store
 	git         *gitx.Client
 	buildLogs   buildlog.Store
@@ -40,10 +43,11 @@ type services struct {
 
 func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *dockerx.Client, keyring *secrets.Keyring) *services {
 	s := &services{logger: logger, db: db, docker: docker, users: sqlite.Users{DB: db}}
-	secretStore := &secrets.Builtin{Keys: keyring, Store: sqlite.SecretVersions{DB: db}, Now: time.Now}
-	s.deployKeys = deploykey.Store{Secrets: secretStore}
+	s.secrets = &secrets.Builtin{Keys: keyring, Store: sqlite.SecretVersions{DB: db}, Now: time.Now}
+	s.deployKeys = deploykey.Store{Secrets: s.secrets}
 	s.apps = &apps.Service{Store: sqlite.Apps{DB: db}, Keys: s.deployKeys, Now: time.Now}
 	s.specs = &apps.Specs{Apps: s.apps, Store: sqlite.SpecVersions{DB: db}, Now: time.Now}
+	s.envs = &environments.Service{Store: sqlite.Environments{DB: db}, Apps: s.apps, Now: time.Now}
 	s.git = &gitx.Client{HostKeys: sqlite.KnownHosts{DB: db}, Now: time.Now}
 	s.buildLogs = buildlog.Store{Dir: filepath.Join(cfg.DataDir, "logs", "builds")}
 	s.buildHub = buildlog.NewHub()
@@ -87,12 +91,9 @@ func (s *services) apiDeps() api.Deps {
 			Queue:  s.buildRunner,
 			Now:    time.Now,
 		},
-		BuildLogs: api.BuildLogs{Store: s.buildLogs, Hub: s.buildHub},
-		Environments: &environments.Service{
-			Store: sqlite.Environments{DB: db},
-			Apps:  s.apps,
-			Now:   time.Now,
-		},
+		BuildLogs:    api.BuildLogs{Store: s.buildLogs, Hub: s.buildHub},
+		Environments: s.envs,
+		EnvSecrets:   &envsecrets.Service{Envs: s.envs, Secrets: s.secrets},
 		ConnectionTester: &apps.ConnectionTester{
 			Apps: s.apps,
 			Keys: s.deployKeys,
