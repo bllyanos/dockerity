@@ -33,6 +33,8 @@ type Deps struct {
 	Specs SpecService
 	// Environments manages environments. When nil, environment routes are not registered.
 	Environments EnvironmentService
+	// Backups takes and restores backups. When nil, backup routes are not registered.
+	Backups BackupService
 	// EnvContainers lists environment containers. When nil, the route is not registered.
 	EnvContainers EnvContainerService
 	// EnvSecrets manages environment secrets. When nil, secret routes are not registered.
@@ -103,6 +105,9 @@ func apiRoutes(d Deps) *routes {
 	}
 	if d.Environments != nil {
 		environmentHandlers{logger: d.Logger, envs: d.Environments, audit: aud}.register(rt)
+	}
+	if d.Backups != nil {
+		backupHandlers{logger: d.Logger, backups: d.Backups, audit: aud}.register(rt)
 	}
 	if d.EnvContainers != nil {
 		envContainerHandlers{logger: d.Logger, containers: d.EnvContainers}.register(rt)
