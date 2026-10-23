@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { listBuilds } from '../../api/builds'
-import { listDeployments, previewDeployment, previewRollback, rollback, startDeployment, type DeployWarning } from '../../api/deployments'
+import { listDeployments, previewDeployment, previewRollback, rollback, startDeployment } from '../../api/deployments'
 import { StatusBadge } from '../../components/StatusBadge'
 import { Cell, Table } from '../../components/Table'
 import { Button } from '../../components/form/Button'
@@ -9,7 +9,7 @@ import { ErrorMessage } from '../../components/form/ErrorMessage'
 import { useSubmit } from '../../components/form/useSubmit'
 import { formatDateTime } from '../../lib/format'
 import { useLoad } from '../../lib/useLoad'
-import { DowntimeWarning } from './DowntimeWarning'
+import { useDowntimeGuard } from './useDowntimeGuard'
 
 type Props = { envId: number; appId: number }
 
@@ -23,17 +23,7 @@ export function DeploymentsPanel({ envId, appId }: Props) {
   const [buildId, setBuildId] = useState<number | null>(null)
   const selected = buildId ?? builds.data?.[0]?.id ?? null
 
-  // A pending action waits for confirmation when its preview shows downtime.
-  const [pending, setPending] = useState<{ warning: DeployWarning; run: () => Promise<void> } | null>(null)
-
-  async function guarded(preview: () => Promise<DeployWarning>, run: () => Promise<void>) {
-    const w = await preview()
-    if (w.downtime) {
-      setPending({ warning: w, run })
-      return
-    }
-    await run()
-  }
+  const { guarded, dialog, error: confirmError } = useDowntimeGuard()
 
   const deploy = useSubmit(async () => {
     if (selected === null) throw new Error('Pick a build to deploy')
@@ -51,9 +41,6 @@ export function DeploymentsPanel({ envId, appId }: Props) {
       () => previewRollback(target),
       async () => navigate(`/deployments/${(await rollback(target)).id}`),
     )
-  })
-  const confirm = useSubmit(async () => {
-    if (pending) await pending.run()
   })
 
   const current = deployments.data?.find((d) => d.current)
@@ -79,12 +66,8 @@ export function DeploymentsPanel({ envId, appId }: Props) {
         <Button type="submit" disabled={deploy.pending || selected === null}>Deploy</Button>
         {builds.data?.length === 0 && <span className="text-sm text-slate-500">No succeeded builds yet.</span>}
       </form>
-      {pending && (
-        <DowntimeWarning warning={pending.warning} pending={confirm.pending}
-          onConfirm={() => void confirm.run()}
-          onCancel={() => setPending(null)} />
-      )}
-      <ErrorMessage error={deploy.error ?? rollbackAction.error ?? confirm.error ?? builds.error ?? deployments.error} />
+      {dialog}
+      <ErrorMessage error={deploy.error ?? rollbackAction.error ?? confirmError ?? builds.error ?? deployments.error} />
       {deployments.data && deployments.data.length > 0 && (
         <Table headers={['#', 'Status', 'Build', 'Spec', 'Secrets', 'Started', '']}>
           {deployments.data.map((d) => (
