@@ -387,3 +387,26 @@ func (fakeEnvContainers) List(_ context.Context, envID int64) ([]environments.Co
 		{Name: "dkt-shop-prod-web-d2", Service: "web", Deployment: "2", Running: true, Routed: true},
 	}, nil
 }
+
+// fakeBackups backs up service "db" of environment 1.
+type fakeBackups struct{ list []domain.Backup }
+
+func (f *fakeBackups) List(context.Context, int64) ([]domain.Backup, error) { return f.list, nil }
+
+func (f *fakeBackups) BackupService(_ context.Context, envID int64, service string, reason domain.BackupReason) ([]domain.Backup, error) {
+	if service != "db" {
+		return nil, domain.Invalid("service", "not stateful")
+	}
+	b := domain.Backup{ID: int64(len(f.list) + 1), EnvID: &envID, Service: service, Volume: "dkt-shop-prod-db-data", File: "x.tar.gz", Reason: reason}
+	f.list = append(f.list, b)
+	return []domain.Backup{b}, nil
+}
+
+func (f *fakeBackups) Restore(_ context.Context, id int64) (domain.Backup, error) {
+	for _, b := range f.list {
+		if b.ID == id {
+			return b, nil
+		}
+	}
+	return domain.Backup{}, domain.ErrNotFound
+}

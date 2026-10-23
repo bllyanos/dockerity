@@ -10,6 +10,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/apps"
 	"github.com/bllyanos/dockerity/internal/auth"
 	"github.com/bllyanos/dockerity/internal/auth/password"
+	"github.com/bllyanos/dockerity/internal/backups"
 	"github.com/bllyanos/dockerity/internal/build"
 	"github.com/bllyanos/dockerity/internal/buildlog"
 	"github.com/bllyanos/dockerity/internal/config"
@@ -46,6 +47,7 @@ type services struct {
 	deployHub    *buildlog.Hub
 	deployRunner *executor.Runner
 	routes       routing.Files
+	backups      *backups.Service
 }
 
 func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *dockerx.Client, keyring *secrets.Keyring) *services {
@@ -95,6 +97,14 @@ func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *doc
 		Now:     time.Now,
 	}}
 	s.envs.Routes = s.deployRunner.Exec
+	s.backups = &backups.Service{
+		Envs:          s.envs,
+		Store:         sqlite.Backups{DB: db},
+		Docker:        docker,
+		Specs:         backups.CurrentSpecs{Deployments: sqlite.Deployments{DB: db}, Specs: s.specs},
+		BackupsVolume: cfg.BackupsVolume,
+		Now:           time.Now,
+	}
 	return s
 }
 
@@ -134,6 +144,7 @@ func (s *services) apiDeps() api.Deps {
 		},
 		DeploymentLogs: api.LogSource{Store: s.deployLogs, Hub: s.deployHub},
 		Environments:   s.envs,
+		Backups:        s.backups,
 		EnvContainers:  &environments.Containers{Envs: s.envs, Docker: s.docker, Routes: s.routes},
 		EnvSecrets:     &envsecrets.Service{Envs: s.envs, Secrets: s.secrets},
 		ConnectionTester: &apps.ConnectionTester{
