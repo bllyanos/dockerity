@@ -23,17 +23,21 @@ import (
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	cmd := run
-	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
-		cmd = healthcheck
-	}
-	if err := cmd(ctx); err != nil {
+	if err := dispatch(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "dockerity:", err)
 		os.Exit(1)
 	}
+}
+
+// dispatch runs the subcommand named in args, or the server by default.
+func dispatch(args []string) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if len(args) > 0 && args[0] == "healthcheck" {
+		return healthcheck(ctx)
+	}
+	return run(ctx)
 }
 
 func run(ctx context.Context) error {
