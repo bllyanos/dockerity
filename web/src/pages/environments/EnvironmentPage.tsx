@@ -7,6 +7,7 @@ import { ErrorMessage } from '../../components/form/ErrorMessage'
 import { TextField } from '../../components/form/TextField'
 import { useSubmit } from '../../components/form/useSubmit'
 import { useLoad } from '../../lib/useLoad'
+import { DeploymentsPanel } from '../deployments/DeploymentsPanel'
 import { SecretsPanel } from './SecretsPanel'
 
 export function EnvironmentPage() {
@@ -41,6 +42,7 @@ export function EnvironmentPage() {
         }
       />
       <div className="space-y-6">
+        <DeploymentsPanel envId={env.id} appId={env.appId} />
         <form onSubmit={saveDomain.onSubmit} className="flex max-w-xl items-end gap-3 rounded-lg border border-slate-200 bg-white p-4">
           <div className="flex-1">
             <TextField label="Domain" name="domain" placeholder="not routed"

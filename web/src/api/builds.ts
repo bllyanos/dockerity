@@ -1,3 +1,4 @@
+import { followLog, type LogHandlers } from '../lib/followLog'
 import { api } from './client'
 
 export type BuildStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled'
@@ -35,22 +36,7 @@ export async function cancelBuild(id: number): Promise<void> {
   await api<void>(`/builds/${id}/cancel`, { method: 'POST' })
 }
 
-type LogHandlers = {
-  /** Called when a (re)connection starts; the server resends the whole log. */
-  onReset: () => void
-  onChunk: (text: string) => void
-  /** Called once the build finished and the log is complete. */
-  onEnd: () => void
-}
-
 /** Follows a build's log over Server-Sent Events. Returns a function that stops following. */
-export function followBuildLog(id: number, { onReset, onChunk, onEnd }: LogHandlers): () => void {
-  const source = new EventSource(`/api/v1/builds/${id}/logs`)
-  source.addEventListener('open', onReset)
-  source.addEventListener('log', (e) => onChunk(JSON.parse((e as MessageEvent<string>).data) as string))
-  source.addEventListener('end', () => {
-    source.close()
-    onEnd()
-  })
-  return () => source.close()
+export function followBuildLog(id: number, handlers: LogHandlers): () => void {
+  return followLog(`/api/v1/builds/${id}/logs`, handlers)
 }
