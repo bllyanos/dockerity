@@ -13,15 +13,12 @@ import (
 	"time"
 
 	"github.com/bllyanos/dockerity/internal/api"
-	"github.com/bllyanos/dockerity/internal/auth"
-	"github.com/bllyanos/dockerity/internal/auth/password"
 	"github.com/bllyanos/dockerity/internal/config"
 	"github.com/bllyanos/dockerity/internal/dockerx"
 	"github.com/bllyanos/dockerity/internal/healthprobe"
 	"github.com/bllyanos/dockerity/internal/httpserver"
 	"github.com/bllyanos/dockerity/internal/logging"
 	"github.com/bllyanos/dockerity/internal/store/sqlite"
-	"github.com/bllyanos/dockerity/web"
 )
 
 func main() {
@@ -61,19 +58,7 @@ func run(ctx context.Context) error {
 	}
 	defer docker.Close()
 
-	router := api.NewRouter(api.Deps{
-		Logger: logger,
-		UI:     web.Dist(),
-		Setup: &auth.Setup{
-			Users:          sqlite.Users{DB: db},
-			PasswordParams: password.DefaultParams,
-			Now:            time.Now,
-		},
-		HealthChecks: []api.HealthCheck{
-			sqlite.HealthCheck{DB: db},
-			dockerx.HealthCheck{Docker: docker},
-		},
-	})
+	router := api.NewRouter(buildDeps(logger, db, docker))
 	return httpserver.Run(ctx, logger, cfg.ListenAddr, router)
 }
 
