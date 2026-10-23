@@ -80,6 +80,7 @@ func run(ctx context.Context) error {
 	}
 	defer svc.deployRunner.Wait()
 	go svc.reaper().Run(ctx)
+	go svc.reconciler().Run(ctx)
 
 	router := api.NewRouter(svc.apiDeps())
 	return httpserver.Run(ctx, logger, cfg.ListenAddr, router)

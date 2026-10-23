@@ -303,9 +303,17 @@ singleton deployments such as schedulers.
 
 ### 6.5 Reconciler
 
-Runs on startup and periodically. Compares Docker objects (by label) to the database.
-It finishes or rolls back deployments interrupted by a crash, and reports drift
-such as containers that were removed by hand.
+Runs on startup and every 5 minutes. Compares Docker objects (by label) to the database.
+Deployments interrupted by a crash are marked failed on startup. For each environment
+without a deployment in progress it reports drift (`GET /environments/{id}/drift`):
+
+- `missing` / `stopped`: a long-running service of the current deployment has no running
+  container (e.g. removed by hand). Reported only; a redeploy recreates it.
+- `extra`: a running container the current deployment does not expect. Reported only.
+- `dangling_route`: the route file names a container that does not run.
+
+Safe repairs: routes are rewritten from what runs, and stopped containers nothing expects
+are removed. Running containers and system containers are never touched.
 
 ## 7. Environments
 
