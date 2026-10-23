@@ -6,6 +6,7 @@ import { AppDetailPage } from './pages/apps/AppDetailPage'
 import { AppsPage } from './pages/apps/AppsPage'
 import { SpecPage } from './pages/apps/SpecPage'
 import { AuditPage } from './pages/AuditPage'
+import { BuildPage } from './pages/builds/BuildPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { SetupPage } from './pages/SetupPage'
@@ -29,6 +30,7 @@ function Gate() {
             <Route path="apps" element={<AppsPage />} />
             <Route path="apps/:id" element={<AppDetailPage />} />
             <Route path="apps/:id/spec" element={<SpecPage />} />
+            <Route path="builds/:id" element={<BuildPage />} />
             <Route path="tokens" element={<TokensPage />} />
             {state.user.isAdmin && <Route path="users" element={<UsersPage />} />}
             {state.user.isAdmin && <Route path="audit" element={<AuditPage />} />}
