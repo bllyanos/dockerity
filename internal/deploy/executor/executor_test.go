@@ -452,6 +452,22 @@ func TestFailingPreDeployJobLeavesServicesUntouched(t *testing.T) {
 	}
 }
 
+type countingGC struct{ runs int }
+
+func (g *countingGC) Collect(context.Context) error { g.runs++; return nil }
+
+func TestImageGCRunsAfterSuccessOnly(t *testing.T) {
+	f := newFixture(t)
+	gc := &countingGC{}
+	f.exec.ImageGC = gc
+	f.deploy(1, 1, 1)
+	f.docker.unhealthy["web"] = true
+	f.deploy(2, 1, 1)
+	if gc.runs != 1 {
+		t.Fatalf("collections %d, want 1", gc.runs)
+	}
+}
+
 func TestUnhealthyServiceFailsDeploy(t *testing.T) {
 	f := newFixture(t)
 	f.docker.unhealthy["web"] = true
