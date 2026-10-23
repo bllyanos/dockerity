@@ -22,6 +22,10 @@ func (f Files) path(app, env string) string {
 // Write replaces the environment's file atomically, so Traefik never reads a
 // half-written configuration.
 func (f Files) Write(app, env string, data []byte) error {
+	return f.writeFile(filepath.Base(f.path(app, env)), data)
+}
+
+func (f Files) writeFile(name string, data []byte) error {
 	if err := os.MkdirAll(f.Dir, 0o755); err != nil {
 		return err
 	}
@@ -41,7 +45,7 @@ func (f Files) Write(app, env string, data []byte) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), f.path(app, env))
+	return os.Rename(tmp.Name(), filepath.Join(f.Dir, name))
 }
 
 // Remove deletes the environment's file; a missing file is not an error.
@@ -64,4 +68,18 @@ func (f Files) Routed(app, env string) (map[string]bool, error) {
 		return nil, err
 	}
 	return RoutedContainers(data)
+}
+
+// WriteTLS replaces the shared TLS configuration.
+func (f Files) WriteTLS(data []byte) error {
+	return f.writeFile(tlsFile, data)
+}
+
+// RemoveTLS deletes the shared TLS configuration.
+func (f Files) RemoveTLS() error {
+	err := os.Remove(filepath.Join(f.Dir, tlsFile))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return err
 }
