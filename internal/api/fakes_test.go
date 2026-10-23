@@ -210,3 +210,13 @@ func (f *fakeApps) Update(ctx context.Context, id int64, in apps.UpdateInput) (d
 func (f *fakeApps) Delete(ctx context.Context, id int64) (domain.App, error) {
 	return f.Get(ctx, id)
 }
+
+func (f *fakeApps) RegenerateDeployKey(ctx context.Context, id int64) (domain.App, error) {
+	a, err := f.Get(ctx, id)
+	if err != nil {
+		return a, err
+	}
+	a.DeployPublicKey += "-regenerated"
+	f.apps[id-1] = a
+	return a, nil
+}
