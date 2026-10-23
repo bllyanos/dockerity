@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bllyanos/dockerity/internal/auth"
+	"github.com/bllyanos/dockerity/internal/deploy/warning"
 	"github.com/bllyanos/dockerity/internal/domain"
 )
 
@@ -16,6 +17,7 @@ type DeploymentService interface {
 	Start(ctx context.Context, envID, buildID int64, actor *int64) (domain.Deployment, error)
 	List(ctx context.Context, envID int64) ([]domain.Deployment, error)
 	Get(ctx context.Context, id int64) (domain.Deployment, []domain.DeploymentStep, error)
+	Preview(ctx context.Context, envID, buildID int64) (warning.Warning, error)
 }
 
 type deploymentHandlers struct {
@@ -27,6 +29,7 @@ type deploymentHandlers struct {
 
 func (h deploymentHandlers) register(rt *routes) {
 	rt.handle("POST /environments/{id}/deployments", h.start)
+	rt.handle("POST /environments/{id}/deployments/preview", h.preview)
 	rt.handle("GET /environments/{id}/deployments", h.list)
 	rt.handle("GET /deployments/{id}", h.get)
 	rt.handle("GET /deployments/{id}/logs", h.streamLogs)
@@ -142,4 +145,50 @@ func (h deploymentHandlers) streamLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	serveLog(w, r, h.logger, h.logs, id, d.Status.Terminal())
+}
+
+type warningServiceView struct {
+	Name         string                `json:"name"`
+	Strategy     string                `json:"strategy"`
+	Downtime     bool                  `json:"downtime"`
+	OldImage     string                `json:"oldImage"`
+	NewImage     string                `json:"newImage"`
+	ImageChanged bool                  `json:"imageChanged"`
+	MajorChange  bool                  `json:"majorChange"`
+	Backup       bool                  `json:"backup"`
+	LastBackup   map[string]*time.Time `json:"lastBackup"`
+	Dependents   []string              `json:"dependents"`
+}
+
+type warningView struct {
+	Downtime bool                 `json:"downtime"`
+	Services []warningServiceView `json:"services"`
+}
+
+func (h deploymentHandlers) preview(w http.ResponseWriter, r *http.Request) {
+	envID, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var req startDeploymentRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	wn, err := h.deployments.Preview(r.Context(), envID, req.BuildID)
+	if err != nil {
+		writeServiceError(w, r, h.logger, err)
+		return
+	}
+	view := warningView{Downtime: wn.Downtime, Services: make([]warningServiceView, 0, len(wn.Services))}
+	for _, s := range wn.Services {
+		deps := s.Dependents
+		if deps == nil {
+			deps = []string{}
+		}
+		view.Services = append(view.Services, warningServiceView{
+			Name: s.Name, Strategy: string(s.Strategy), Downtime: s.Downtime, OldImage: s.OldImage, NewImage: s.NewImage,
+			ImageChanged: s.ImageChanged, MajorChange: s.MajorChange, Backup: s.Backup, LastBackup: s.LastBackup, Dependents: deps,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]warningView{"warning": view})
 }
