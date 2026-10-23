@@ -7,8 +7,6 @@ type NavItem = { label: string; to?: string; adminOnly?: boolean }
 const navItems: NavItem[] = [
   { label: 'Status', to: '/' },
   { label: 'Apps', to: '/apps' },
-  { label: 'Environments' },
-  { label: 'Deployments' },
   { label: 'API tokens', to: '/tokens' },
   { label: 'Users', to: '/users', adminOnly: true },
   { label: 'Audit', to: '/audit', adminOnly: true },
