@@ -157,3 +157,9 @@ func scanBuild(row rowScanner) (domain.Build, error) {
 	}
 	return b, nil
 }
+
+// SetBuildCommit records the commit a running build resolved its ref to.
+func (r Builds) SetBuildCommit(ctx context.Context, id int64, commitSHA string) error {
+	return execOne(ctx, r.DB, `UPDATE builds SET commit_sha = ? WHERE id = ? AND status = ?`,
+		commitSHA, id, string(domain.BuildRunning))
+}
