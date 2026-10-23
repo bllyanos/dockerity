@@ -31,6 +31,8 @@ type Deps struct {
 	Apps AppService
 	// Specs saves and reads app spec versions. When nil, spec routes are not registered.
 	Specs SpecService
+	// Environments manages environments. When nil, environment routes are not registered.
+	Environments EnvironmentService
 	// Builds triggers and reads builds. When nil, build routes are not registered.
 	Builds BuildService
 	// BuildLogs serves persisted and live build logs.
@@ -90,6 +92,9 @@ func apiRoutes(d Deps) *routes {
 	}
 	if d.Specs != nil {
 		specHandlers{logger: d.Logger, specs: d.Specs, audit: aud}.register(rt)
+	}
+	if d.Environments != nil {
+		environmentHandlers{logger: d.Logger, envs: d.Environments, audit: aud}.register(rt)
 	}
 	if d.Builds != nil {
 		buildHandlers{logger: d.Logger, builds: d.Builds, logs: d.BuildLogs, audit: aud}.register(rt)

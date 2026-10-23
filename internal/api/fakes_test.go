@@ -271,3 +271,37 @@ func (f *fakeBuilds) Cancel(ctx context.Context, id int64) (domain.Build, error)
 	f.canceled = append(f.canceled, id)
 	return b, nil
 }
+
+// fakeEnvs keeps environments for app 1.
+type fakeEnvs struct{ envs []domain.Environment }
+
+func (f *fakeEnvs) List(context.Context, int64) ([]domain.Environment, error) { return f.envs, nil }
+
+func (f *fakeEnvs) Get(_ context.Context, id int64) (domain.Environment, error) {
+	for _, e := range f.envs {
+		if e.ID == id {
+			return e, nil
+		}
+	}
+	return domain.Environment{}, domain.ErrNotFound
+}
+
+func (f *fakeEnvs) CreatePermanent(_ context.Context, appID int64, name, host string) (domain.Environment, error) {
+	e := domain.Environment{ID: int64(len(f.envs) + 1), AppID: appID, AppName: "shop", Name: name, Type: domain.EnvPermanent, Domain: host}
+	f.envs = append(f.envs, e)
+	return e, nil
+}
+
+func (f *fakeEnvs) UpdateDomain(ctx context.Context, id int64, host string) (domain.Environment, error) {
+	e, err := f.Get(ctx, id)
+	if err != nil {
+		return e, err
+	}
+	e.Domain = host
+	f.envs[id-1] = e
+	return e, nil
+}
+
+func (f *fakeEnvs) Delete(ctx context.Context, id int64) (domain.Environment, error) {
+	return f.Get(ctx, id)
+}
