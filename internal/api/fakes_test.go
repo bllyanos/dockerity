@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/bllyanos/dockerity/internal/apps"
 	"github.com/bllyanos/dockerity/internal/auth"
 	"github.com/bllyanos/dockerity/internal/domain"
 )
@@ -164,4 +165,48 @@ func (f *fakeUserAdmin) ResetPassword(_ context.Context, id int64, _ string) (do
 		return domain.User{}, domain.ErrNotFound
 	}
 	return f.users[id-1], nil
+}
+
+// fakeApps keeps apps in a slice and applies only the duplicate-name rule.
+type fakeApps struct{ apps []domain.App }
+
+func (f *fakeApps) List(context.Context) ([]domain.App, error) { return f.apps, nil }
+
+func (f *fakeApps) Get(_ context.Context, id int64) (domain.App, error) {
+	for _, a := range f.apps {
+		if a.ID == id {
+			return a, nil
+		}
+	}
+	return domain.App{}, domain.ErrNotFound
+}
+
+func (f *fakeApps) Create(_ context.Context, in apps.CreateInput) (domain.App, error) {
+	for _, a := range f.apps {
+		if a.Name == in.Name {
+			return domain.App{}, domain.ErrConflict
+		}
+	}
+	if in.Name == "" {
+		return domain.App{}, domain.Invalid("name", "required")
+	}
+	a := domain.App{ID: int64(len(f.apps) + 1), Name: in.Name, RepoURL: in.RepoURL, DefaultBranch: in.DefaultBranch, DeployPublicKey: "ssh-ed25519 AAAA"}
+	f.apps = append(f.apps, a)
+	return a, nil
+}
+
+func (f *fakeApps) Update(ctx context.Context, id int64, in apps.UpdateInput) (domain.App, error) {
+	a, err := f.Get(ctx, id)
+	if err != nil {
+		return a, err
+	}
+	if in.DefaultBranch != nil {
+		a.DefaultBranch = *in.DefaultBranch
+	}
+	f.apps[id-1] = a
+	return a, nil
+}
+
+func (f *fakeApps) Delete(ctx context.Context, id int64) (domain.App, error) {
+	return f.Get(ctx, id)
 }

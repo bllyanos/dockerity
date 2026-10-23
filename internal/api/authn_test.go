@@ -13,7 +13,7 @@ import (
 
 func fullDeps() Deps {
 	return Deps{Logger: discardLogger, Setup: &fakeSetup{}, Sessions: newFakeSessions(), Tokens: newFakeTokens(), Audit: &fakeAudit{},
-		Users: &fakeUserAdmin{users: []domain.User{alice}}}
+		Users: &fakeUserAdmin{users: []domain.User{alice}}, Apps: &fakeApps{}}
 }
 
 // concretePath turns a mux pattern like "DELETE /tokens/{id}" into a method and path.

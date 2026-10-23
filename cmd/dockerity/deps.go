@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bllyanos/dockerity/internal/api"
+	"github.com/bllyanos/dockerity/internal/apps"
 	"github.com/bllyanos/dockerity/internal/auth"
 	"github.com/bllyanos/dockerity/internal/auth/password"
 	"github.com/bllyanos/dockerity/internal/dockerx"
@@ -29,6 +30,7 @@ func buildDeps(logger *slog.Logger, db *sql.DB, docker *dockerx.Client) api.Deps
 			Now:            time.Now,
 		},
 		Audit: sqlite.AuditLog{DB: db},
+		Apps:  &apps.Service{Store: sqlite.Apps{DB: db}, Now: time.Now},
 		Users: &auth.UserAdmin{
 			Users:          users,
 			Credentials:    credentials{sqlite.Sessions{DB: db}, sqlite.APITokens{DB: db}},
