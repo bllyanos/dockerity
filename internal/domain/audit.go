@@ -27,3 +27,6 @@ type AuditEvent struct {
 	Metadata   map[string]string
 	RemoteAddr string
 }
+
+// AuditSecretsUpdated records a new secret set version (key names only).
+const AuditSecretsUpdated = "secrets.updated"
