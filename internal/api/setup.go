@@ -17,11 +17,13 @@ type SetupService interface {
 type setupHandlers struct {
 	logger *slog.Logger
 	setup  SetupService
+	// sessions, when set, logs the new admin in right after setup.
+	sessions SessionService
 }
 
-func (h setupHandlers) register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /setup", h.status)
-	mux.HandleFunc("POST /setup", h.run)
+func (h setupHandlers) register(rt *routes) {
+	rt.handlePublic("GET /setup", h.status)
+	rt.handlePublic("POST /setup", h.run)
 }
 
 func (h setupHandlers) status(w http.ResponseWriter, r *http.Request) {
@@ -47,6 +49,14 @@ func (h setupHandlers) run(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeServiceError(w, r, h.logger, err)
 		return
+	}
+	if h.sessions != nil {
+		raw, sess, err := h.sessions.Start(r.Context(), u)
+		if err != nil {
+			writeServiceError(w, r, h.logger, err)
+			return
+		}
+		setSessionCookie(w, r, raw, sess.ExpiresAt)
 	}
 	writeJSON(w, http.StatusCreated, map[string]userView{"user": toUserView(u)})
 }
