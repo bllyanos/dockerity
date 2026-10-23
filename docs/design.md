@@ -130,6 +130,30 @@ services:
 Environment-level overrides (replicas, resources, env values) are stored on the
 Environment, not in the spec.
 
+### Spec format reference
+
+Top level: `name` and `services` (required). Service fields:
+
+| Field | Type | Notes |
+|---|---|---|
+| `kind` | `job` \| `deployment` \| `stateful` | required |
+| `image` | string | public image; exactly one of `image` / `build` |
+| `build` | string (context) or mapping | `context`, `dockerfile`, `target`, `args` |
+| `command` | list of strings | |
+| `env` | mapping | plain, non-secret values |
+| `secrets` | list | `NAME` (env var) or `{name, file}` (tmpfs file) |
+| `volumes` | mapping name → path | stateful only |
+| `depends_on` | list of service names | must form a DAG |
+| `phase` | `pre-deploy` \| `post-deploy` | jobs only |
+| `strategy` | `blue-green` \| `recreate` | deployments only |
+| `http` | `port`, `path` | routed through Traefik |
+| `healthcheck` | `cmd` (list) or `http` (path), `interval`, `timeout`, `start_period`, `retries` | |
+| `resources` | `memory` (e.g. `512m`), `cpus` (e.g. `0.5`) | |
+
+Compose fields that Dockerity owns are rejected with a hint: `container_name`, `ports`,
+`networks`, `network_mode`, `restart`, `deploy`. Unknown fields are errors. Every
+problem is reported with its line and column.
+
 ### Spec validation rules
 
 - `deployment` with `strategy: blue-green` must have a healthcheck and no host port binding.
