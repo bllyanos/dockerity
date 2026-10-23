@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 
+	"github.com/bllyanos/dockerity/internal/deploy/containerspec"
 	"github.com/bllyanos/dockerity/internal/dockerx"
 	"github.com/bllyanos/dockerity/internal/domain"
 )
@@ -12,6 +13,7 @@ import (
 type Container struct {
 	Name       string
 	Service    string
+	Kind       string // job, deployment or stateful
 	Deployment string
 	Image      string
 	Running    bool
@@ -49,8 +51,9 @@ func (c *Containers) List(ctx context.Context, envID int64) ([]Container, error)
 	out := make([]Container, 0, len(list))
 	for _, ci := range list {
 		out = append(out, Container{
-			Name: ci.Name, Service: ci.Labels[domain.LabelService], Deployment: ci.Labels[domain.LabelDeployment],
-			Image: ci.Image, Running: ci.Running, Routed: routed[ci.Name],
+			Name: ci.Name, Service: ci.Labels[domain.LabelService], Kind: ci.Labels[containerspec.LabelKind],
+			Deployment: ci.Labels[domain.LabelDeployment],
+			Image:      ci.Image, Running: ci.Running, Routed: routed[ci.Name],
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {

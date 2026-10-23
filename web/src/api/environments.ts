@@ -35,6 +35,8 @@ export async function deleteEnvironment(id: number, skipBackup = false): Promise
 export type EnvContainer = {
   name: string
   service: string
+  kind: 'job' | 'deployment' | 'stateful' | ''
+
   deployment: string
   image: string
   running: boolean

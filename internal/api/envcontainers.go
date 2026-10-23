@@ -25,6 +25,7 @@ func (h envContainerHandlers) register(rt *routes) {
 type containerView struct {
 	Name       string `json:"name"`
 	Service    string `json:"service"`
+	Kind       string `json:"kind"`
 	Deployment string `json:"deployment"`
 	Image      string `json:"image"`
 	Running    bool   `json:"running"`
