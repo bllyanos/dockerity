@@ -4,6 +4,7 @@ import { deleteApp, getApp, type App } from '../../api/apps'
 import { PageHeader } from '../../components/PageHeader'
 import { Button } from '../../components/form/Button'
 import { ErrorMessage } from '../../components/form/ErrorMessage'
+import { BuildsPanel } from '../builds/BuildsPanel'
 import { AppSettingsForm } from './AppSettingsForm'
 import { DeployKeyPanel } from './DeployKeyPanel'
 
@@ -46,6 +47,7 @@ export function AppDetailPage() {
       />
       <ErrorMessage error={error} />
       <div className="space-y-6">
+        <BuildsPanel appId={app.id} defaultBranch={app.defaultBranch} />
         <DeployKeyPanel app={app} onChanged={setApp} />
         <AppSettingsForm key={app.updatedAt} app={app} onChanged={setApp} />
       </div>
