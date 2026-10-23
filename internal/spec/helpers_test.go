@@ -20,9 +20,12 @@ func TestParseMemory(t *testing.T) {
 }
 
 func TestParseCPUs(t *testing.T) {
-	for in, want := range map[string]float64{"0.5": 0.5, "2": 2, " 1.25 ": 1.25} {
-		if got, err := ParseCPUs(in); err != nil || got != want {
-			t.Errorf("%s: got %v, %v", in, got, err)
+	for _, c := range []struct {
+		in   string
+		want float64
+	}{{"0.5", 0.5}, {"2", 2}, {" 1.25 ", 1.25}} {
+		if got, err := ParseCPUs(c.in); err != nil || got != c.want {
+			t.Errorf("%q: got %v, %v", c.in, got, err)
 		}
 	}
 	for _, bad := range []string{"", "0", "-1", "half", "2000"} {
