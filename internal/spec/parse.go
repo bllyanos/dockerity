@@ -105,6 +105,10 @@ func (d *decoder) service(entry field) Service {
 			s.Healthcheck = d.healthcheck(f.value, what)
 		case "resources":
 			s.Resources = d.resources(f.value, what)
+		case "drain":
+			s.Drain = d.duration(f.value, what)
+		case "stop_grace_period":
+			s.StopGracePeriod = d.duration(f.value, what)
 		default:
 			delete(s.FieldPos, f.key)
 			d.unknown(f, where)

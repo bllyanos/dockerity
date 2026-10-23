@@ -3,6 +3,7 @@ package spec
 import (
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestParseMemory(t *testing.T) {
@@ -68,5 +69,16 @@ func TestEffectiveDefaults(t *testing.T) {
 	}
 	if (Service{Kind: KindJob}).EffectivePhase() != PhasePreDeploy || (HTTP{}).RoutePath() != "/" {
 		t.Fatal("phase or path defaults")
+	}
+}
+
+func TestEffectiveTimings(t *testing.T) {
+	s := Service{}
+	if s.EffectiveDrain() != DefaultDrain || s.EffectiveStopGracePeriod() != DefaultStopGracePeriod {
+		t.Fatal("defaults")
+	}
+	s = Service{Drain: 2 * time.Second, StopGracePeriod: 3 * time.Second}
+	if s.EffectiveDrain() != 2*time.Second || s.EffectiveStopGracePeriod() != 3*time.Second {
+		t.Fatal("overrides")
 	}
 }

@@ -57,6 +57,19 @@ func validateService(ps *Problems, s Spec, svc Service) {
 	validateHTTP(ps, svc)
 	validateHealthcheck(ps, svc)
 	validateResources(ps, svc)
+	validateTimings(ps, svc)
+}
+
+func validateTimings(ps *Problems, svc Service) {
+	if svc.Drain > MaxTiming {
+		ps.add(svc.At("drain"), "drain must be at most %s", MaxTiming)
+	}
+	if svc.StopGracePeriod > MaxTiming {
+		ps.add(svc.At("stop_grace_period"), "stop_grace_period must be at most %s", MaxTiming)
+	}
+	if svc.Drain != 0 && svc.Kind == KindJob {
+		ps.add(svc.At("drain"), "jobs are not routed, so they have no drain period")
+	}
 }
 
 func validateKind(ps *Problems, svc Service) {
