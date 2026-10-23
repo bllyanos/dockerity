@@ -25,6 +25,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/routing"
 	"github.com/bllyanos/dockerity/internal/secrets"
 	"github.com/bllyanos/dockerity/internal/settings"
+	"github.com/bllyanos/dockerity/internal/spawn"
 	"github.com/bllyanos/dockerity/internal/store/sqlite"
 	"github.com/bllyanos/dockerity/web"
 )
@@ -120,6 +121,18 @@ func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *doc
 // apiDeps assembles the collaborators of the HTTP API.
 func (s *services) apiDeps() api.Deps {
 	db := s.db
+	deploys := &deployments.Service{
+		Store:     sqlite.Deployments{DB: db},
+		Envs:      s.envs,
+		Builds:    sqlite.Builds{DB: db},
+		Specs:     s.specs,
+		Secrets:   s.secrets,
+		Runner:    s.deployRunner,
+		Previewer: s.deployRunner.Exec,
+		Extender:  s.envs,
+		Backups:   sqlite.Backups{DB: db},
+		Now:       time.Now,
+	}
 	return api.Deps{
 		Logger: s.logger,
 		UI:     web.Dist(),
@@ -141,19 +154,9 @@ func (s *services) apiDeps() api.Deps {
 			Queue:  s.buildRunner,
 			Now:    time.Now,
 		},
-		BuildLogs: api.LogSource{Store: s.buildLogs, Hub: s.buildHub},
-		Deployments: &deployments.Service{
-			Store:     sqlite.Deployments{DB: db},
-			Envs:      s.envs,
-			Builds:    sqlite.Builds{DB: db},
-			Specs:     s.specs,
-			Secrets:   s.secrets,
-			Runner:    s.deployRunner,
-			Previewer: s.deployRunner.Exec,
-			Extender:  s.envs,
-			Backups:   sqlite.Backups{DB: db},
-			Now:       time.Now,
-		},
+		BuildLogs:      api.LogSource{Store: s.buildLogs, Hub: s.buildHub},
+		Deployments:    deploys,
+		Spawn:          &spawn.Service{Envs: s.envs, Secrets: s.secrets, Deployments: deploys},
 		DeploymentLogs: api.LogSource{Store: s.deployLogs, Hub: s.deployHub},
 		Environments:   s.envs,
 		Backups:        s.backups,

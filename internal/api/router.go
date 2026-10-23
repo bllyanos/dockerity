@@ -33,6 +33,8 @@ type Deps struct {
 	Specs SpecService
 	// Environments manages environments. When nil, environment routes are not registered.
 	Environments EnvironmentService
+	// Spawn creates ephemeral environments. When nil, the spawn route is not registered.
+	Spawn SpawnService
 	// Settings reads and updates instance settings. When nil, settings routes are not registered.
 	Settings SettingsService
 	// Backups takes and restores backups. When nil, backup routes are not registered.
@@ -107,6 +109,9 @@ func apiRoutes(d Deps) *routes {
 	}
 	if d.Environments != nil {
 		environmentHandlers{logger: d.Logger, envs: d.Environments, audit: aud}.register(rt)
+	}
+	if d.Spawn != nil {
+		spawnHandlers{logger: d.Logger, spawner: d.Spawn, audit: aud}.register(rt)
 	}
 	if d.Settings != nil {
 		settingsHandlers{logger: d.Logger, settings: d.Settings, audit: aud}.register(rt)
