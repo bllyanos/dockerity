@@ -418,3 +418,14 @@ func (f *fakeDeployments) Preview(_ context.Context, _, buildID int64) (warning.
 	}
 	return warning.Warning{Downtime: true, Services: []warning.Service{{Name: "db", Downtime: true, MajorChange: true, Backup: true, Dependents: []string{"api"}}}}, nil
 }
+
+// memSettings is an in-memory settings store.
+type memSettings map[string]string
+
+func (m memSettings) AllSettings(context.Context) (map[string]string, error) { return m, nil }
+func (m memSettings) SaveSettings(_ context.Context, v map[string]string, _ time.Time) error {
+	for k, x := range v {
+		m[k] = x
+	}
+	return nil
+}
