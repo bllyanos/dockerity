@@ -20,7 +20,7 @@ func (l *listDocker) ListManaged(_ context.Context, labels map[string]string) ([
 	l.got = labels
 	return []dockerx.ContainerInfo{
 		{Name: "dkt-shop-prod-web-d2", Image: "web:b", Running: true, Labels: map[string]string{"dockerity.service": "web", "dockerity.deployment": "2"}},
-		{Name: "dkt-shop-prod-db-d1", Image: "mysql", Running: true, Labels: map[string]string{"dockerity.service": "db", "dockerity.deployment": "1"}},
+		{Name: "dkt-shop-prod-db-d1", Image: "mysql", Running: true, Labels: map[string]string{"dockerity.service": "db", "dockerity.deployment": "1", "dockerity.kind": "stateful"}},
 		{Name: "dkt-shop-prod-web-d1", Image: "web:a", Running: true, Labels: map[string]string{"dockerity.service": "web", "dockerity.deployment": "1"}},
 	}, nil
 }
@@ -39,7 +39,7 @@ func TestContainers(t *testing.T) {
 	if d.got["dockerity.app"] != "shop" || d.got["dockerity.env"] != "prod" {
 		t.Fatalf("filter %v", d.got)
 	}
-	if len(list) != 3 || list[0].Service != "db" || list[0].Routed || list[1].Name != "dkt-shop-prod-web-d1" || !list[1].Routed || !list[2].Routed {
+	if len(list) != 3 || list[0].Service != "db" || list[0].Kind != "stateful" || list[0].Routed || list[1].Name != "dkt-shop-prod-web-d1" || !list[1].Routed || !list[2].Routed {
 		t.Fatalf("list %+v", list)
 	}
 }
