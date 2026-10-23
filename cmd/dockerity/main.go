@@ -79,6 +79,7 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("deploy runner: %w", err)
 	}
 	defer svc.deployRunner.Wait()
+	go svc.reaper().Run(ctx)
 
 	router := api.NewRouter(svc.apiDeps())
 	return httpserver.Run(ctx, logger, cfg.ListenAddr, router)
