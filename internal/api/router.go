@@ -29,6 +29,8 @@ type Deps struct {
 	Users UserAdminService
 	// Apps manages apps. When nil, app routes are not registered.
 	Apps AppService
+	// Specs saves and reads app spec versions. When nil, spec routes are not registered.
+	Specs SpecService
 	// ConnectionTester tests repo access. When nil, the test-connection route is not registered.
 	ConnectionTester ConnectionTester
 	// Audit stores the audit log. When nil, nothing is recorded and the audit API is not registered.
@@ -81,6 +83,9 @@ func apiRoutes(d Deps) *routes {
 	}
 	if d.Apps != nil {
 		appHandlers{logger: d.Logger, apps: d.Apps, tester: d.ConnectionTester, audit: aud}.register(rt)
+	}
+	if d.Specs != nil {
+		specHandlers{logger: d.Logger, specs: d.Specs, audit: aud}.register(rt)
 	}
 	if d.Tokens != nil {
 		tokenHandlers{logger: d.Logger, tokens: d.Tokens, audit: aud}.register(rt)
