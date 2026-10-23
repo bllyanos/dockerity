@@ -4,10 +4,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Dockerity is in the design phase. The only source of truth so far is `docs/design.md`.
-Read it before implementing anything, and update it when a design decision changes.
-No code, build, lint or test commands exist yet. Add them here once the skeleton
-(milestone 1 in the design doc) is in place.
+The design lives in `docs/design.md`. Read it before implementing anything, and update it
+when a design decision changes.
+
+## Commands
+
+Go is pinned in `mise.toml`, Node in `.nvmrc`. Lint needs `golangci-lint` v2 on `PATH`
+(or `make lint GOLANGCI_LINT=/path/to/golangci-lint`).
+
+```sh
+make web-deps          # npm ci in web/ (once)
+make build             # build UI into web/dist, then bin/dockerity
+make build-go          # Go binary only (embeds whatever is in web/dist)
+make test              # go test ./...
+make lint              # golangci-lint + oxlint
+make run               # build and run with data in ./.data (needs Docker socket)
+go test ./internal/store/sqlite -run TestMigrateIsIdempotent   # single test
+cd web && npm run dev  # Vite dev server, proxies /api and /healthz to :8080
+```
+
+Bootstrap stack: `deploy/docker-compose.yml` (see README). CI runs Go lint and race tests,
+web lint and build, and a Docker image build (`.github/workflows/ci.yml`).
+
+`web/dist/.gitkeep` is tracked so `go:embed` compiles before the UI is built; the web
+build re-creates it. Server config is env vars (`DOCKERITY_*`, see `internal/config`).
 
 ## What Dockerity is
 
