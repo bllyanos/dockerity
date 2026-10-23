@@ -18,6 +18,7 @@ type EnvironmentService interface {
 	UpdateDomain(ctx context.Context, id int64, host string) (domain.Environment, error)
 	Delete(ctx context.Context, id int64, skipBackup bool) (domain.Environment, error)
 	Extend(ctx context.Context, id int64) (domain.Environment, error)
+	SetResources(ctx context.Context, id int64, o domain.ResourceOverrides) (domain.Environment, error)
 }
 
 type environmentHandlers struct {
@@ -33,24 +34,26 @@ func (h environmentHandlers) register(rt *routes) {
 	rt.handle("PATCH /environments/{id}", h.update)
 	rt.handle("DELETE /environments/{id}", h.delete)
 	rt.handle("POST /environments/{id}/extend", h.extend)
+	rt.handle("PUT /environments/{id}/resources", h.setResources)
 }
 
 type environmentView struct {
-	ID         int64          `json:"id"`
-	AppID      int64          `json:"appId"`
-	AppName    string         `json:"appName"`
-	Name       string         `json:"name"`
-	Type       domain.EnvType `json:"type"`
-	Domain     string         `json:"domain"`
-	TTLSeconds int64          `json:"ttlSeconds"`
-	ExpiresAt  *time.Time     `json:"expiresAt"`
-	CreatedAt  time.Time      `json:"createdAt"`
-	UpdatedAt  time.Time      `json:"updatedAt"`
+	ID         int64                    `json:"id"`
+	AppID      int64                    `json:"appId"`
+	AppName    string                   `json:"appName"`
+	Name       string                   `json:"name"`
+	Type       domain.EnvType           `json:"type"`
+	Domain     string                   `json:"domain"`
+	TTLSeconds int64                    `json:"ttlSeconds"`
+	ExpiresAt  *time.Time               `json:"expiresAt"`
+	Resources  domain.ResourceOverrides `json:"resources"`
+	CreatedAt  time.Time                `json:"createdAt"`
+	UpdatedAt  time.Time                `json:"updatedAt"`
 }
 
 func toEnvView(e domain.Environment) environmentView {
 	return environmentView{ID: e.ID, AppID: e.AppID, AppName: e.AppName, Name: e.Name, Type: e.Type,
-		Domain: e.Domain, TTLSeconds: int64(e.TTL / time.Second), ExpiresAt: e.ExpiresAt, CreatedAt: e.CreatedAt, UpdatedAt: e.UpdatedAt}
+		Domain: e.Domain, TTLSeconds: int64(e.TTL / time.Second), ExpiresAt: e.ExpiresAt, Resources: resourcesOrEmpty(e.Resources), CreatedAt: e.CreatedAt, UpdatedAt: e.UpdatedAt}
 }
 
 func envEvent(action string, e domain.Environment) domain.AuditEvent {
@@ -161,5 +164,34 @@ func (h environmentHandlers) extend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.audit.record(r, envEvent(domain.AuditEnvironmentExtended, e))
+	writeJSON(w, http.StatusOK, map[string]environmentView{"environment": toEnvView(e)})
+}
+
+func resourcesOrEmpty(o domain.ResourceOverrides) domain.ResourceOverrides {
+	if o == nil {
+		return domain.ResourceOverrides{}
+	}
+	return o
+}
+
+type setResourcesRequest struct {
+	Resources domain.ResourceOverrides `json:"resources"`
+}
+
+func (h environmentHandlers) setResources(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var req setResourcesRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	e, err := h.envs.SetResources(r.Context(), id, req.Resources)
+	if err != nil {
+		writeServiceError(w, r, h.logger, err)
+		return
+	}
+	h.audit.record(r, envEvent(domain.AuditEnvironmentUpdated, e))
 	writeJSON(w, http.StatusOK, map[string]environmentView{"environment": toEnvView(e)})
 }

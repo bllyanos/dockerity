@@ -50,6 +50,7 @@ type appView struct {
 	RepoURL         string    `json:"repoUrl"`
 	DefaultBranch   string    `json:"defaultBranch"`
 	DeployPublicKey string    `json:"deployPublicKey"`
+	MaxEphemeral    int       `json:"maxEphemeral"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
@@ -57,7 +58,7 @@ type appView struct {
 func toAppView(a domain.App) appView {
 	return appView{
 		ID: a.ID, Name: a.Name, RepoURL: a.RepoURL, DefaultBranch: a.DefaultBranch,
-		DeployPublicKey: a.DeployPublicKey, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
+		DeployPublicKey: a.DeployPublicKey, MaxEphemeral: a.MaxEphemeral, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 	}
 }
 
@@ -114,6 +115,7 @@ func (h appHandlers) get(w http.ResponseWriter, r *http.Request) {
 type updateAppRequest struct {
 	RepoURL       *string `json:"repoUrl"`
 	DefaultBranch *string `json:"defaultBranch"`
+	MaxEphemeral  *int    `json:"maxEphemeral"`
 }
 
 func (h appHandlers) update(w http.ResponseWriter, r *http.Request) {

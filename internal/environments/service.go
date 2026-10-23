@@ -10,6 +10,7 @@ import (
 
 	"github.com/bllyanos/dockerity/internal/domain"
 	"github.com/bllyanos/dockerity/internal/settings"
+	"github.com/bllyanos/dockerity/internal/spec"
 )
 
 // Store persists environments.
@@ -20,6 +21,8 @@ type Store interface {
 	UpdateEnvironment(ctx context.Context, e domain.Environment) error
 	DeleteEnvironment(ctx context.Context, id int64) error
 	SetExpiry(ctx context.Context, id int64, expires time.Time) error
+	SetResources(ctx context.Context, id int64, o domain.ResourceOverrides) error
+	CountEphemeral(ctx context.Context, appID int64) (int, error)
 }
 
 // Service implements environment create, update and delete.
@@ -115,6 +118,15 @@ func (s *Service) CreateEphemeral(ctx context.Context, appID int64, name string,
 	if cfg.BaseDomain == "" {
 		return domain.Environment{}, domain.Invalid("baseDomain", "set a base domain in the settings before spawning ephemeral environments")
 	}
+	if app.MaxEphemeral > 0 {
+		n, err := s.Store.CountEphemeral(ctx, appID)
+		if err != nil {
+			return domain.Environment{}, err
+		}
+		if n >= app.MaxEphemeral {
+			return domain.Environment{}, domain.Conflictf("%s already has %d ephemeral environments, the limit for this app; delete one or raise the limit", app.Name, n)
+		}
+	}
 	host, err := domain.EphemeralDomain(name, app.Name, cfg.BaseDomain)
 	if err != nil {
 		return domain.Environment{}, err
@@ -149,6 +161,35 @@ func (s *Service) Extend(ctx context.Context, id int64) (domain.Environment, err
 		return domain.Environment{}, err
 	}
 	e.ExpiresAt = &expires
+	return e, nil
+}
+
+// SetResources replaces the environment's memory and CPU overrides. Keys are
+// service names, or "*" for every service; empty fields keep the spec's value.
+func (s *Service) SetResources(ctx context.Context, id int64, o domain.ResourceOverrides) (domain.Environment, error) {
+	e, err := s.Get(ctx, id)
+	if err != nil {
+		return domain.Environment{}, err
+	}
+	for svc, r := range o {
+		if svc != domain.AllServices && !domain.IsDNSLabel(svc) {
+			return domain.Environment{}, domain.Invalid("resources", "%q is not a service name", svc)
+		}
+		if r.Memory != "" {
+			if _, err := spec.ParseMemory(r.Memory); err != nil {
+				return domain.Environment{}, domain.Invalid("resources", "%s: %s", svc, err)
+			}
+		}
+		if r.CPUs != "" {
+			if _, err := spec.ParseCPUs(r.CPUs); err != nil {
+				return domain.Environment{}, domain.Invalid("resources", "%s: %s", svc, err)
+			}
+		}
+	}
+	if err := s.Store.SetResources(ctx, id, o); err != nil {
+		return domain.Environment{}, err
+	}
+	e.Resources = o
 	return e, nil
 }
 

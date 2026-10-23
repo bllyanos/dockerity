@@ -54,3 +54,34 @@ func TestEnvironmentsCRUD(t *testing.T) {
 		t.Fatalf("after delete: %v", err)
 	}
 }
+
+func TestLimitsColumns(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	apps := Apps{DB: db}
+	app := newAppForTest(t, apps, "shop")
+	app.MaxEphemeral = 2
+	if err := apps.UpdateApp(ctx, app); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := apps.GetApp(ctx, app.ID); got.MaxEphemeral != 2 {
+		t.Fatalf("max ephemeral %d", got.MaxEphemeral)
+	}
+
+	r := Environments{DB: db}
+	now := time.Now()
+	e, _ := r.CreateEnvironment(ctx, domain.Environment{AppID: app.ID, Name: "pr-1", Type: domain.EnvEphemeral, ExpiresAt: &now, CreatedAt: now, UpdatedAt: now})
+	_, _ = r.CreateEnvironment(ctx, domain.Environment{AppID: app.ID, Name: "prod", Type: domain.EnvPermanent, CreatedAt: now, UpdatedAt: now})
+	if n, err := r.CountEphemeral(ctx, app.ID); err != nil || n != 1 {
+		t.Fatalf("count %d %v", n, err)
+	}
+
+	o := domain.ResourceOverrides{"*": {Memory: "256m"}, "db": {CPUs: "2"}}
+	if err := r.SetResources(ctx, e.ID, o); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := r.GetEnvironment(ctx, e.ID)
+	if got.Resources["db"].CPUs != "2" || got.Resources["*"].Memory != "256m" {
+		t.Fatalf("overrides %+v", got.Resources)
+	}
+}

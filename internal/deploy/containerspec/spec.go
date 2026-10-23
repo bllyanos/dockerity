@@ -96,6 +96,8 @@ type Input struct {
 	Image        string
 	// Secrets holds the decrypted secret set; only referenced keys are used.
 	Secrets map[string]string
+	// Override replaces the spec's memory or CPU limit in this environment.
+	Override domain.ResourceOverride
 }
 
 // ShortID is the deployment part of container names.
@@ -126,7 +128,7 @@ func Build(in Input) (Spec, error) {
 	for _, v := range svc.Volumes {
 		s.Mounts = append(s.Mounts, Mount{Volume: domain.VolumeName(in.App, in.Env, svc.Name, v.Name), Target: v.Path})
 	}
-	if err := resources(&s, svc.Resources); err != nil {
+	if err := resources(&s, withOverride(svc.Resources, in.Override)); err != nil {
 		return Spec{}, err
 	}
 	healthchecks(&s, svc)
@@ -179,6 +181,24 @@ func resources(s *Spec, r *spec.Resources) error {
 		s.NanoCPUs = int64(c * 1e9)
 	}
 	return nil
+}
+
+// withOverride applies an environment's override on top of the spec's resources.
+func withOverride(r *spec.Resources, o domain.ResourceOverride) *spec.Resources {
+	if o.Memory == "" && o.CPUs == "" {
+		return r
+	}
+	out := spec.Resources{}
+	if r != nil {
+		out = *r
+	}
+	if o.Memory != "" {
+		out.Memory = o.Memory
+	}
+	if o.CPUs != "" {
+		out.CPUs = o.CPUs
+	}
+	return &out
 }
 
 func healthchecks(s *Spec, svc spec.Service) {

@@ -24,8 +24,10 @@ type App struct {
 	DefaultBranch string
 	// DeployPublicKey is the OpenSSH public key to add to the repo as a deploy key.
 	DeployPublicKey string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	// MaxEphemeral limits active ephemeral environments; 0 means no limit.
+	MaxEphemeral int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // ValidateAppName checks an app name.

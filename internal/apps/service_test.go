@@ -144,3 +144,17 @@ func TestUpdateAndDelete(t *testing.T) {
 		t.Fatalf("after delete: %v", err)
 	}
 }
+
+func TestUpdateMaxEphemeral(t *testing.T) {
+	s := newService()
+	ctx := context.Background()
+	a, _ := s.Create(ctx, CreateInput{Name: "shop", RepoURL: "git@github.com:org/shop.git"})
+	three, bad := 3, -1
+	if got, err := s.Update(ctx, a.ID, UpdateInput{MaxEphemeral: &three}); err != nil || got.MaxEphemeral != 3 {
+		t.Fatalf("set: %+v %v", got, err)
+	}
+	var ve *domain.ValidationError
+	if _, err := s.Update(ctx, a.ID, UpdateInput{MaxEphemeral: &bad}); !errors.As(err, &ve) {
+		t.Fatalf("negative: %v", err)
+	}
+}

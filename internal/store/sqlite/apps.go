@@ -13,7 +13,7 @@ type Apps struct {
 	DB *sql.DB
 }
 
-const appColumns = `id, name, repo_url, default_branch, deploy_public_key, created_at, updated_at`
+const appColumns = `id, name, repo_url, default_branch, deploy_public_key, max_ephemeral, created_at, updated_at`
 
 // ListApps returns all apps ordered by name.
 func (r Apps) ListApps(ctx context.Context) ([]domain.App, error) {
@@ -41,9 +41,9 @@ func (r Apps) GetApp(ctx context.Context, id int64) (domain.App, error) {
 // CreateApp inserts a. A taken name returns domain.ErrConflict.
 func (r Apps) CreateApp(ctx context.Context, a domain.App) (domain.App, error) {
 	res, err := r.DB.ExecContext(ctx, `
-		INSERT INTO apps (name, repo_url, default_branch, deploy_public_key, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)`,
-		a.Name, a.RepoURL, a.DefaultBranch, a.DeployPublicKey, formatTime(a.CreatedAt), formatTime(a.UpdatedAt))
+		INSERT INTO apps (name, repo_url, default_branch, deploy_public_key, max_ephemeral, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		a.Name, a.RepoURL, a.DefaultBranch, a.DeployPublicKey, a.MaxEphemeral, formatTime(a.CreatedAt), formatTime(a.UpdatedAt))
 	if err != nil {
 		if isUniqueViolation(err) {
 			return domain.App{}, domain.ErrConflict
@@ -59,8 +59,8 @@ func (r Apps) CreateApp(ctx context.Context, a domain.App) (domain.App, error) {
 // UpdateApp saves the mutable fields of a. The name never changes.
 func (r Apps) UpdateApp(ctx context.Context, a domain.App) error {
 	return execOne(ctx, r.DB, `
-		UPDATE apps SET repo_url = ?, default_branch = ?, deploy_public_key = ?, updated_at = ? WHERE id = ?`,
-		a.RepoURL, a.DefaultBranch, a.DeployPublicKey, formatTime(a.UpdatedAt), a.ID)
+		UPDATE apps SET repo_url = ?, default_branch = ?, deploy_public_key = ?, max_ephemeral = ?, updated_at = ? WHERE id = ?`,
+		a.RepoURL, a.DefaultBranch, a.DeployPublicKey, a.MaxEphemeral, formatTime(a.UpdatedAt), a.ID)
 }
 
 // DeleteApp removes the app or returns domain.ErrNotFound.
@@ -73,7 +73,7 @@ func scanApp(row rowScanner) (domain.App, error) {
 		a                domain.App
 		created, updated string
 	)
-	err := row.Scan(&a.ID, &a.Name, &a.RepoURL, &a.DefaultBranch, &a.DeployPublicKey, &created, &updated)
+	err := row.Scan(&a.ID, &a.Name, &a.RepoURL, &a.DefaultBranch, &a.DeployPublicKey, &a.MaxEphemeral, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.App{}, domain.ErrNotFound
 	}
