@@ -20,10 +20,17 @@ type TeardownDocker interface {
 // they hold data and are backed up and removed by the environment delete flow.
 type Teardown struct {
 	Docker TeardownDocker
+	// Routes, when set, has the environment's route file removed first.
+	Routes RouteFiles
 }
 
 // Remove stops and removes everything Dockerity runs for app/env.
 func (t Teardown) Remove(ctx context.Context, app, env string) error {
+	if t.Routes != nil {
+		if err := t.Routes.Remove(app, env); err != nil {
+			return err
+		}
+	}
 	list, err := t.Docker.ListManaged(ctx, map[string]string{domain.LabelApp: app, domain.LabelEnv: env})
 	if err != nil {
 		return err

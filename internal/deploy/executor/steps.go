@@ -8,6 +8,7 @@ import (
 
 	"github.com/bllyanos/dockerity/internal/deploy/containerspec"
 	"github.com/bllyanos/dockerity/internal/deploy/planner"
+	"github.com/bllyanos/dockerity/internal/dockerx"
 	"github.com/bllyanos/dockerity/internal/domain"
 	"github.com/bllyanos/dockerity/internal/spec"
 )
@@ -42,54 +43,81 @@ func (e *Executor) step(ctx context.Context, j *job, st planner.Step, logs io.Wr
 }
 
 // others lists the service's containers that belong to other deployments.
-func (e *Executor) others(ctx context.Context, j *job, service string) ([]string, error) {
+func (e *Executor) others(ctx context.Context, j *job, service string) ([]dockerx.ContainerInfo, error) {
 	list, err := e.Docker.ListManaged(ctx, map[string]string{
 		domain.LabelApp: j.env.AppName, domain.LabelEnv: j.env.Name, domain.LabelService: service,
 	})
 	if err != nil {
 		return nil, err
 	}
-	var ids []string
+	var out []dockerx.ContainerInfo
 	for _, c := range list {
 		if c.Name != j.containers[service].Name {
-			ids = append(ids, c.ID)
+			out = append(out, c)
 		}
 	}
-	return ids, nil
+	return out, nil
 }
 
-// recreate stops the old containers of a service, then starts the new one and
-// waits until it is healthy. The service is down in between.
+// recreate takes the old containers of a service out of routing, stops them,
+// then starts the new one and routes it once healthy. The service is down in
+// between.
 func (e *Executor) recreate(ctx context.Context, j *job, service string, logs io.Writer) error {
 	cs := j.containers[service]
 	old, err := e.others(ctx, j, service)
 	if err != nil {
 		return err
 	}
-	for _, id := range old {
-		_, _ = fmt.Fprintf(logs, "Stopping old container %.12s\n", id)
-		if err := e.Docker.StopContainer(ctx, id, cs.StopTimeout); err != nil {
+	if err := e.unroute(ctx, j, old); err != nil {
+		return err
+	}
+	for _, c := range old {
+		_, _ = fmt.Fprintf(logs, "Stopping old container %s\n", c.Name)
+		if err := e.Docker.StopContainer(ctx, c.ID, cs.StopTimeout); err != nil {
 			return err
 		}
-		if err := e.Docker.RemoveContainer(ctx, id); err != nil {
+		if err := e.Docker.RemoveContainer(ctx, c.ID); err != nil {
 			return err
 		}
 	}
+	_, err = e.startHealthy(ctx, j, cs, logs)
+	return err
+}
+
+// startHealthy creates and starts a container, waits until it is healthy and
+// only then routes it. A container that never becomes healthy is removed, so
+// it never receives traffic.
+func (e *Executor) startHealthy(ctx context.Context, j *job, cs containerspec.Spec, logs io.Writer) (string, error) {
 	_, _ = fmt.Fprintf(logs, "Starting %s (%s)\n", cs.Name, cs.Image)
+	j.excluded[cs.Name] = true
 	id, err := e.Docker.CreateContainer(ctx, cs)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err := e.Docker.StartContainer(ctx, id); err != nil {
-		return err
+		_ = e.Docker.RemoveContainer(context.Background(), id)
+		return "", err
 	}
 	if err := e.Docker.WaitHealthy(ctx, id, cs); err != nil {
 		_, _ = fmt.Fprintln(logs, "Container did not become healthy; its last output:")
 		_ = e.Docker.Logs(context.Background(), id, false, logs)
-		return err
+		_ = e.Docker.RemoveContainer(context.Background(), id)
+		return "", err
 	}
-	_, _ = fmt.Fprintf(logs, "%s is healthy\n", cs.Name)
-	return nil
+	delete(j.excluded, cs.Name)
+	_, _ = fmt.Fprintf(logs, "%s is healthy and routed\n", cs.Name)
+	return id, e.syncRoutes(ctx, j.env, j.spec, j.excluded)
+}
+
+// unroute takes containers out of the routes before they are stopped.
+func (e *Executor) unroute(ctx context.Context, j *job, containers []dockerx.ContainerInfo) error {
+	if len(containers) == 0 {
+		return nil
+	}
+	for _, c := range containers {
+		j.excluded[c.Name] = true
+	}
+	return e.syncRoutes(ctx, j.env, j.spec, j.excluded)
 }
 
 // runJob runs a job container to completion, streaming its output. A non-zero
@@ -133,13 +161,17 @@ func (e *Executor) finish(ctx context.Context, j *job, logs io.Writer) error {
 	for _, cs := range j.containers {
 		names = append(names, cs.Name)
 	}
+	var stale []dockerx.ContainerInfo
 	for _, c := range all {
-		svc := c.Labels[domain.LabelService]
-		_, inSpec := j.spec.Service(svc)
-		stale := !inSpec || (!c.Running && !slices.Contains(names, c.Name))
-		if !stale {
-			continue
+		_, inSpec := j.spec.Service(c.Labels[domain.LabelService])
+		if !inSpec || (!c.Running && !slices.Contains(names, c.Name)) {
+			stale = append(stale, c)
 		}
+	}
+	if err := e.unroute(ctx, j, stale); err != nil {
+		return err
+	}
+	for _, c := range stale {
 		_, _ = fmt.Fprintf(logs, "Removing %s\n", c.Name)
 		if err := e.Docker.StopContainer(ctx, c.ID, containerspec.DefaultStop); err != nil {
 			return err

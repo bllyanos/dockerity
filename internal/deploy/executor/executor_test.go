@@ -164,6 +164,21 @@ func (m *memStore) GetDeployment(_ context.Context, id int64) (domain.Deployment
 	return *m.deps[id], nil
 }
 
+func (m *memStore) CurrentDeployment(_ context.Context, envID int64) (domain.Deployment, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var cur *domain.Deployment
+	for _, d := range m.deps {
+		if d.EnvID == envID && d.Status == domain.DeploymentSucceeded && (cur == nil || d.ID > cur.ID) {
+			cur = d
+		}
+	}
+	if cur == nil {
+		return domain.Deployment{}, domain.ErrNotFound
+	}
+	return *cur, nil
+}
+
 func (m *memStore) ListDeploymentsByStatus(_ context.Context, s domain.DeploymentStatus) ([]domain.Deployment, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -290,8 +305,32 @@ services:
       port: 8080
 `
 
+// fakeRoutes records the routed containers of each write into the Docker op log.
+type fakeRoutes struct {
+	docker *fakeDocker
+	writes []string
+}
+
+func (r *fakeRoutes) Write(app, env string, data []byte) error {
+	var names []string
+	for _, line := range strings.Split(string(data), "\n") {
+		if i := strings.Index(line, "url: http://"); i >= 0 {
+			names = append(names, strings.SplitN(line[i+len("url: http://"):], ":", 2)[0])
+		}
+	}
+	entry := "routes [" + strings.Join(names, " ") + "]"
+	r.writes = append(r.writes, entry)
+	r.docker.mu.Lock()
+	r.docker.op("%s", entry)
+	r.docker.mu.Unlock()
+	return nil
+}
+
+func (r *fakeRoutes) Remove(string, string) error { return nil }
+
 type fixture struct {
 	exec   *Executor
+	routes *fakeRoutes
 	store  *memStore
 	docker *fakeDocker
 	logs   buildlog.Store
@@ -315,6 +354,13 @@ func newFixture(t *testing.T) *fixture {
 		Docker:  f.docker, Logs: f.logs, Hub: buildlog.NewHub(), Routing: routing.DefaultOptions,
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Now: time.Now,
 	}
+	return f
+}
+
+// withRoutes makes the fixture record route writes in the op log.
+func (f *fixture) withRoutes() *fixture {
+	f.routes = &fakeRoutes{docker: f.docker}
+	f.exec.Routes = f.routes
 	return f
 }
 
@@ -454,4 +500,56 @@ func TestRunnerRecoversInterruptedDeployments(t *testing.T) {
 			t.Fatalf("deployment %d: %+v", id, d)
 		}
 	}
+}
+
+func TestRoutesOnlyEverContainHealthyContainers(t *testing.T) {
+	f := newFixture(t).withRoutes()
+	f.deploy(1, 1, 1)
+	f.docker.ops = nil
+	f.deploy(2, 1, 1)
+	ops := strings.Join(f.docker.ops, "\n")
+	// Recreate: the old container leaves routing before it stops; the new one
+	// is routed only after it started and passed its health check.
+	want := "routes []\nstop dkt-shop-staging-web-d1\nremove dkt-shop-staging-web-d1\n" +
+		"create dkt-shop-staging-web-d2\nstart dkt-shop-staging-web-d2\nroutes [dkt-shop-staging-web-d2]"
+	if !strings.Contains(ops, want) {
+		t.Fatalf("route order wrong:\n%s", ops)
+	}
+	if last := f.routes.writes[len(f.routes.writes)-1]; last != "routes [dkt-shop-staging-web-d2]" {
+		t.Fatalf("final routes %s", last)
+	}
+}
+
+func TestUnhealthyContainerIsNeverRouted(t *testing.T) {
+	f := newFixture(t).withRoutes()
+	f.docker.unhealthy["web"] = true
+	f.deploy(1, 1, 1)
+	for _, w := range f.routes.writes {
+		if strings.Contains(w, "web-d1") {
+			t.Fatalf("unhealthy container routed: %v", f.routes.writes)
+		}
+	}
+	if got := f.docker.running("web"); len(got) != 0 {
+		t.Fatalf("unhealthy container must be removed, running %v", got)
+	}
+}
+
+func TestRunnerRebuildsRoutesOnStart(t *testing.T) {
+	f := newFixture(t).withRoutes()
+	f.deploy(1, 1, 1)
+	f.exec.AllEnvs = allEnvs{}
+	f.routes.writes = nil
+	if err := (&Runner{Exec: f.exec}).Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.routes.writes) != 1 || f.routes.writes[0] != "routes [dkt-shop-staging-web-d1]" {
+		t.Fatalf("rebuilt routes %v", f.routes.writes)
+	}
+}
+
+type allEnvs struct{}
+
+func (allEnvs) ListAllEnvironments(ctx context.Context) ([]domain.Environment, error) {
+	e, _ := staticEnv{}.Get(ctx, 1)
+	return []domain.Environment{e}, nil
 }

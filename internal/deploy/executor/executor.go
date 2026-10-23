@@ -29,6 +29,10 @@ type Executor struct {
 	Logs    buildlog.Store
 	Hub     *buildlog.Hub
 	Routing routing.Options
+	// Routes, when set, receives each environment's Traefik routes.
+	Routes RouteFiles
+	// AllEnvs, when set, lets RebuildAllRoutes find every environment.
+	AllEnvs AllEnvs
 	Logger  *slog.Logger
 	Now     func() time.Time
 }
@@ -41,6 +45,8 @@ type job struct {
 	containers map[string]containerspec.Spec
 	steps      []domain.DeploymentStep
 	plan       planner.Plan
+	// excluded holds containers that must not receive traffic yet (or anymore).
+	excluded map[string]bool
 }
 
 // Run executes a pending deployment to a terminal status.
@@ -117,7 +123,7 @@ func (e *Executor) prepare(ctx context.Context, id int64, logs io.Writer) (*job,
 		return nil, err
 	}
 
-	j := &job{dep: dep, env: env, spec: s, containers: map[string]containerspec.Spec{}}
+	j := &job{dep: dep, env: env, spec: s, containers: map[string]containerspec.Spec{}, excluded: map[string]bool{}}
 	fingerprints := map[string]string{}
 	for _, svc := range s.Services {
 		image := svc.Image
@@ -172,8 +178,14 @@ func (e *Executor) current(ctx context.Context, env domain.Environment) (map[str
 	return out, nil
 }
 
-// execute runs the steps in order and stops at the first failure.
-func (e *Executor) execute(ctx context.Context, j *job, logs io.Writer) error {
+// execute runs the steps in order and stops at the first failure. Routes are
+// rewritten at the end either way, so they always match what runs.
+func (e *Executor) execute(ctx context.Context, j *job, logs io.Writer) (err error) {
+	defer func() {
+		if rerr := e.syncRoutes(context.Background(), j.env, j.spec, j.excluded); rerr != nil {
+			err = errors.Join(err, fmt.Errorf("write routes: %w", rerr))
+		}
+	}()
 	for i, st := range j.plan.Steps {
 		row := j.steps[i]
 		if err := e.Store.StartStep(ctx, row.ID, e.Now().UTC()); err != nil {

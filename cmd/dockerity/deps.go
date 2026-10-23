@@ -57,7 +57,7 @@ func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *doc
 		Store:       sqlite.Environments{DB: db},
 		Apps:        s.apps,
 		Deployments: sqlite.Deployments{DB: db},
-		Runtime:     executor.Teardown{Docker: docker},
+		Runtime:     executor.Teardown{Docker: docker, Routes: routing.Files{Dir: cfg.TraefikDir}},
 		Now:         time.Now,
 	}
 	s.git = &gitx.Client{HostKeys: sqlite.KnownHosts{DB: db}, Now: time.Now}
@@ -88,9 +88,12 @@ func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *doc
 		Logs:    s.deployLogs,
 		Hub:     s.deployHub,
 		Routing: routing.DefaultOptions,
+		Routes:  routing.Files{Dir: cfg.TraefikDir},
+		AllEnvs: sqlite.Environments{DB: db},
 		Logger:  logger.With("component", "deploy"),
 		Now:     time.Now,
 	}}
+	s.envs.Routes = s.deployRunner.Exec
 	return s
 }
 
