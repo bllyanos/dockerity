@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bllyanos/dockerity/internal/deploykey"
 	"github.com/bllyanos/dockerity/internal/domain"
 )
 
@@ -22,9 +23,15 @@ type Store interface {
 	DeleteApp(ctx context.Context, id int64) error
 }
 
+// KeyStore keeps private deploy keys.
+type KeyStore interface {
+	Save(ctx context.Context, appID int64, privatePEM []byte, actor *int64) error
+}
+
 // Service implements the app use cases.
 type Service struct {
 	Store Store
+	Keys  KeyStore
 	Now   func() time.Time
 }
 
@@ -74,7 +81,39 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (domain.App, error
 	if errors.Is(err, domain.ErrConflict) {
 		return domain.App{}, domain.Conflictf("an app named %q already exists", a.Name)
 	}
-	return created, err
+	if err != nil {
+		return domain.App{}, err
+	}
+	withKey, err := s.rotateDeployKey(ctx, created)
+	if err != nil {
+		// Do not leave an app without a deploy key behind.
+		_ = s.Store.DeleteApp(ctx, created.ID)
+		return domain.App{}, err
+	}
+	return withKey, nil
+}
+
+// RegenerateDeployKey replaces the app's deploy key; the old key stops working
+// once it is removed from the repo.
+func (s *Service) RegenerateDeployKey(ctx context.Context, id int64) (domain.App, error) {
+	a, err := s.Get(ctx, id)
+	if err != nil {
+		return domain.App{}, err
+	}
+	return s.rotateDeployKey(ctx, a)
+}
+
+func (s *Service) rotateDeployKey(ctx context.Context, a domain.App) (domain.App, error) {
+	kp, err := deploykey.Generate("dockerity-" + a.Name)
+	if err != nil {
+		return domain.App{}, err
+	}
+	if err := s.Keys.Save(ctx, a.ID, kp.PrivatePEM, nil); err != nil {
+		return domain.App{}, err
+	}
+	a.DeployPublicKey = kp.Public
+	a.UpdatedAt = s.Now().UTC()
+	return a, s.Store.UpdateApp(ctx, a)
 }
 
 // Update changes an app's repo URL or default branch.

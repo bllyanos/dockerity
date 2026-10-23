@@ -3,6 +3,7 @@ package apps
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -53,8 +54,50 @@ func (m *memStore) DeleteApp(_ context.Context, id int64) error {
 	return domain.ErrNotFound
 }
 
+type memKeys struct {
+	keys map[int64][]byte
+	fail bool
+}
+
+func (m *memKeys) Save(_ context.Context, appID int64, pem []byte, _ *int64) error {
+	if m.fail {
+		return errors.New("secret store down")
+	}
+	m.keys[appID] = pem
+	return nil
+}
+
 func newService() *Service {
-	return &Service{Store: &memStore{}, Now: func() time.Time { return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC) }}
+	return &Service{Store: &memStore{}, Keys: &memKeys{keys: map[int64][]byte{}}, Now: func() time.Time { return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC) }}
+}
+
+func TestDeployKeys(t *testing.T) {
+	s := newService()
+	keys := s.Keys.(*memKeys)
+	ctx := context.Background()
+	a, err := s.Create(ctx, CreateInput{Name: "shop", RepoURL: "git@github.com:org/shop.git"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(a.DeployPublicKey, "ssh-ed25519 ") || !strings.Contains(string(keys.keys[a.ID]), "PRIVATE KEY") {
+		t.Fatalf("deploy key not set up: %+v", a)
+	}
+	if stored, _ := s.Get(ctx, a.ID); stored.DeployPublicKey != a.DeployPublicKey {
+		t.Fatal("public key not persisted")
+	}
+
+	b, err := s.RegenerateDeployKey(ctx, a.ID)
+	if err != nil || b.DeployPublicKey == a.DeployPublicKey {
+		t.Fatalf("regenerate: %v", err)
+	}
+
+	keys.fail = true
+	if _, err := s.Create(ctx, CreateInput{Name: "blog", RepoURL: "git@github.com:org/blog.git"}); err == nil {
+		t.Fatal("create must fail when the key cannot be stored")
+	}
+	if list, _ := s.List(ctx); len(list) != 1 {
+		t.Fatalf("app without a key was left behind: %+v", list)
+	}
 }
 
 func TestCreate(t *testing.T) {
