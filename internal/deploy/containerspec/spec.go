@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/bllyanos/dockerity/internal/domain"
-	"github.com/bllyanos/dockerity/internal/routing"
 	"github.com/bllyanos/dockerity/internal/secrets/inject"
 	"github.com/bllyanos/dockerity/internal/spec"
 )
@@ -91,13 +90,11 @@ func (s Spec) GoString() string { return s.String() }
 type Input struct {
 	App          string
 	Env          string
-	Domain       string
 	DeploymentID int64
 	Service      spec.Service
 	Image        string
 	// Secrets holds the decrypted secret set; only referenced keys are used.
 	Secrets map[string]string
-	Routing routing.Options
 }
 
 // ShortID is the deployment part of container names.
@@ -138,11 +135,6 @@ func Build(in Input) (Spec, error) {
 		domain.LabelService:    svc.Name,
 		domain.LabelDeployment: strconv.FormatInt(in.DeploymentID, 10),
 		LabelKind:              string(svc.Kind),
-	}
-	if svc.HTTP != nil && svc.Kind != spec.KindJob {
-		maps.Copy(s.Labels, routing.Labels(routing.Route{
-			App: in.App, Env: in.Env, Service: svc.Name, Domain: in.Domain, Path: svc.HTTP.RoutePath(), Port: svc.HTTP.Port,
-		}, in.Routing))
 	}
 	s.Labels[LabelFingerprint] = s.Fingerprint()
 	return s, nil

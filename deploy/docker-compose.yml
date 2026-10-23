@@ -14,6 +14,9 @@ services:
       - --providers.docker=true
       - --providers.docker.exposedByDefault=false
       - --providers.docker.network=dockerity-edge
+      # App routes: Dockerity writes one file per environment here.
+      - --providers.file.directory=/traefik
+      - --providers.file.watch=true
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
     ports:
@@ -21,6 +24,7 @@ services:
       - "${DOCKERITY_HTTPS_PORT:-443}:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - dockerity-traefik:/traefik:ro
     networks:
       - edge
     labels:
@@ -33,10 +37,12 @@ services:
     restart: unless-stopped
     environment:
       DOCKERITY_LOG_LEVEL: ${DOCKERITY_LOG_LEVEL:-info}
+      DOCKERITY_TRAEFIK_DYNAMIC_DIR: /traefik
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - dockerity-data:/data
       - dockerity-backups:/backups
+      - dockerity-traefik:/traefik
     secrets:
       - master_key
     networks:
@@ -57,6 +63,8 @@ volumes:
     name: dockerity-data
   dockerity-backups:
     name: dockerity-backups
+  dockerity-traefik:
+    name: dockerity-traefik
 
 secrets:
   master_key:

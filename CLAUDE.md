@@ -69,7 +69,9 @@ Stack: Go backend, React + Tailwind (Vite) frontend embedded into the Go binary 
 - Stateful volumes belong to the environment, are created by Dockerity as external volumes,
   and survive redeploys. They are backed up before a stateful image change and before
   environment deletion.
-- Routing is done by generating Traefik labels. No host port bindings for routed services.
+- App routing is done by writing Traefik file-provider configuration (one file per
+  environment, `internal/routing`), so Dockerity controls which containers receive traffic.
+  No host port bindings for routed services.
 
 ## Secrets
 

@@ -24,6 +24,7 @@ func TestLoadDefaults(t *testing.T) {
 		MasterKeyFile: DefaultMasterKeyFile,
 		LogLevel:      slog.LevelInfo,
 		BuildWorkers:  DefaultBuildWorkers,
+		TraefikDir:    "/data/traefik",
 	}
 	if cfg != want {
 		t.Fatalf("got %+v, want %+v", cfg, want)
@@ -37,12 +38,13 @@ func TestLoadOverrides(t *testing.T) {
 		EnvMasterKeyFile: "/tmp/key",
 		EnvLogLevel:      "DEBUG",
 		EnvBuildWorkers:  "3",
+		EnvTraefikDir:    "/traefik",
 	}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if cfg.ListenAddr != "127.0.0.1:9000" || cfg.DataDir != "/tmp/dkt" ||
-		cfg.MasterKeyFile != "/tmp/key" || cfg.LogLevel != slog.LevelDebug || cfg.BuildWorkers != 3 {
+		cfg.MasterKeyFile != "/tmp/key" || cfg.LogLevel != slog.LevelDebug || cfg.BuildWorkers != 3 || cfg.TraefikDir != "/traefik" {
 		t.Fatalf("overrides not applied: %+v", cfg)
 	}
 }

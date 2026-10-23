@@ -125,8 +125,8 @@ func (e *Executor) prepare(ctx context.Context, id int64, logs io.Writer) (*job,
 			image = buildImages[svc.Name] // a missing image is reported by the planner
 		}
 		cs, err := containerspec.Build(containerspec.Input{
-			App: env.AppName, Env: env.Name, Domain: env.Domain, DeploymentID: dep.ID,
-			Service: svc, Image: image, Secrets: values, Routing: e.Routing,
+			App: env.AppName, Env: env.Name, DeploymentID: dep.ID,
+			Service: svc, Image: image, Secrets: values,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("service %s: %w", svc.Name, err)

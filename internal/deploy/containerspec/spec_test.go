@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bllyanos/dockerity/internal/routing"
 	"github.com/bllyanos/dockerity/internal/secrets/inject"
 	"github.com/bllyanos/dockerity/internal/spec"
 )
@@ -59,14 +58,18 @@ services:
 var secretValues = map[string]string{"DATABASE_URL": "mysql://u:pw@db/shop", "TLS_KEY": "PEM", "UNUSED": "x"}
 
 func input(svc spec.Service) Input {
-	return Input{App: "shop", Env: "staging", Domain: "staging.shop.test", DeploymentID: 42, Service: svc,
-		Image: "dkt/shop/api:abc", Secrets: secretValues, Routing: routing.DefaultOptions}
+	return Input{App: "shop", Env: "staging", DeploymentID: 42, Service: svc, Image: "dkt/shop/api:abc", Secrets: secretValues}
 }
 
 func TestBuildDeployment(t *testing.T) {
 	s, err := Build(input(service(t, apiSpec, "api")))
 	if err != nil {
 		t.Fatal(err)
+	}
+	for k := range s.Labels {
+		if strings.HasPrefix(k, "traefik.") {
+			t.Fatalf("routing lives in the file provider, not labels: %s", k)
+		}
 	}
 	if s.Name != "dkt-shop-staging-api-d42" || s.Network != "dkt-shop-staging" || !slices.Equal(s.Aliases, []string{"api"}) {
 		t.Fatalf("names %+v", s)
@@ -85,7 +88,7 @@ func TestBuildDeployment(t *testing.T) {
 	}
 	for k, want := range map[string]string{
 		"dockerity.app": "shop", "dockerity.env": "staging", "dockerity.service": "api", "dockerity.deployment": "42",
-		LabelKind: "deployment", "traefik.http.routers.dkt-shop-staging-api.rule": "Host(`staging.shop.test`) && PathPrefix(`/api`)",
+		LabelKind: "deployment",
 	} {
 		if s.Labels[k] != want {
 			t.Errorf("label %s = %q, want %q", k, s.Labels[k], want)
@@ -114,15 +117,12 @@ func TestBuildStatefulAndJob(t *testing.T) {
 	if db.Healthcheck == nil || !slices.Equal(db.Healthcheck.Test, []string{"CMD", "mysqladmin", "ping"}) || db.Healthcheck.Interval != DefaultInterval {
 		t.Fatalf("healthcheck %+v", db.Healthcheck)
 	}
-	if _, routed := db.Labels["traefik.enable"]; routed {
-		t.Fatal("service without http must not be routed")
-	}
 
 	job, err := Build(input(service(t, apiSpec, "migrate")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if job.RestartPolicy != RestartNo || job.Labels["traefik.enable"] != "" {
+	if job.RestartPolicy != RestartNo {
 		t.Fatalf("job %+v", job)
 	}
 }
