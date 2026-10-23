@@ -82,3 +82,13 @@ func TestEffectiveTimings(t *testing.T) {
 		t.Fatal("overrides")
 	}
 }
+
+func TestDependents(t *testing.T) {
+	s := Spec{Services: []Service{svc("db"), svc("api", "db"), svc("worker", "api"), svc("cache"), svc("web", "cache")}}
+	if got := Dependents(s, "db"); !slices.Equal(got, []string{"api", "worker"}) {
+		t.Fatalf("db dependents %v", got)
+	}
+	if got := Dependents(s, "worker"); len(got) != 0 {
+		t.Fatalf("leaf dependents %v", got)
+	}
+}
