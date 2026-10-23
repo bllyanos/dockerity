@@ -4,6 +4,7 @@ import { useAuth } from './auth/AuthContext'
 import { Layout } from './components/Layout'
 import { AppDetailPage } from './pages/apps/AppDetailPage'
 import { AppsPage } from './pages/apps/AppsPage'
+import { SpecPage } from './pages/apps/SpecPage'
 import { AuditPage } from './pages/AuditPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
@@ -27,6 +28,7 @@ function Gate() {
             <Route index element={<HomePage />} />
             <Route path="apps" element={<AppsPage />} />
             <Route path="apps/:id" element={<AppDetailPage />} />
+            <Route path="apps/:id/spec" element={<SpecPage />} />
             <Route path="tokens" element={<TokensPage />} />
             {state.user.isAdmin && <Route path="users" element={<UsersPage />} />}
             {state.user.isAdmin && <Route path="audit" element={<AuditPage />} />}
