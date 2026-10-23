@@ -4,6 +4,7 @@ go 1.27.2
 
 require (
 	github.com/moby/moby/client v0.6.2
+	golang.org/x/crypto v0.58.0
 	modernc.org/sqlite v1.61.0
 )
 
