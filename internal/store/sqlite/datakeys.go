@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"github.com/bllyanos/dockerity/internal/domain"
 	"github.com/bllyanos/dockerity/internal/secrets"
@@ -48,4 +49,53 @@ func (r DataKeys) CountDataKeysNotWrappedBy(ctx context.Context, masterKeyID str
 	err := r.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM data_keys WHERE master_key_id <> ?`, masterKeyID).Scan(&n)
 	return n, err
+}
+
+// ListDataKeys returns every wrapped data key.
+func (r DataKeys) ListDataKeys(ctx context.Context) ([]secrets.WrappedKey, error) {
+	rows, err := r.DB.QueryContext(ctx,
+		`SELECT scope, wrapped_key, nonce, master_key_id, created_at FROM data_keys ORDER BY scope`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []secrets.WrappedKey
+	for rows.Next() {
+		var (
+			k              secrets.WrappedKey
+			scope, created string
+		)
+		if err := rows.Scan(&scope, &k.Sealed.Ciphertext, &k.Sealed.Nonce, &k.MasterKeyID, &created); err != nil {
+			return nil, err
+		}
+		k.Scope = secrets.Scope(scope)
+		if k.CreatedAt, err = parseTime(created); err != nil {
+			return nil, err
+		}
+		out = append(out, k)
+	}
+	return out, rows.Err()
+}
+
+// ReplaceDataKeys updates the wrapping of every given key in one transaction.
+func (r DataKeys) ReplaceDataKeys(ctx context.Context, keys []secrets.WrappedKey) error {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, k := range keys {
+		res, err := tx.ExecContext(ctx,
+			`UPDATE data_keys SET wrapped_key = ?, nonce = ?, master_key_id = ? WHERE scope = ?`,
+			k.Sealed.Ciphertext, k.Sealed.Nonce, k.MasterKeyID, string(k.Scope))
+		if err != nil {
+			return err
+		}
+		if n, err := res.RowsAffected(); err != nil {
+			return err
+		} else if n != 1 {
+			return fmt.Errorf("data key %s disappeared during rotation", k.Scope)
+		}
+	}
+	return tx.Commit()
 }
