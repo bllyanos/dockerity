@@ -28,7 +28,7 @@ func TestAppsAPI(t *testing.T) {
 	if rec = bearer(h, http.MethodGet, APIPrefix+"/apps", raw, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"shop"`) {
 		t.Fatalf("list: %d %s", rec.Code, rec.Body)
 	}
-	if rec = bearer(h, http.MethodPatch, APIPrefix+"/apps/1", raw, `{"defaultBranch":"develop"}`); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"develop"`) {
+	if rec = bearer(h, http.MethodPatch, APIPrefix+"/apps/1", raw, `{"defaultBranch":"develop","maxEphemeral":3}`); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"develop"`) || !strings.Contains(rec.Body.String(), `"maxEphemeral":3`) {
 		t.Fatalf("update: %d %s", rec.Code, rec.Body)
 	}
 	if rec = bearer(h, http.MethodPost, APIPrefix+"/apps/1/deploy-key/regenerate", raw, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "-regenerated") {

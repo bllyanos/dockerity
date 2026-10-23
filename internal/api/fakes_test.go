@@ -207,6 +207,9 @@ func (f *fakeApps) Update(ctx context.Context, id int64, in apps.UpdateInput) (d
 	if in.DefaultBranch != nil {
 		a.DefaultBranch = *in.DefaultBranch
 	}
+	if in.MaxEphemeral != nil {
+		a.MaxEphemeral = *in.MaxEphemeral
+	}
 	f.apps[id-1] = a
 	return a, nil
 }
@@ -451,4 +454,13 @@ func (f *fakeSpawn) Spawn(_ context.Context, appID int64, in spawn.Input, _ *int
 	f.got = in
 	return domain.Environment{ID: 7, AppID: 1, Name: "e-abc123", Type: domain.EnvEphemeral},
 		domain.Deployment{ID: 3, EnvID: 7, BuildID: in.BuildID}, nil
+}
+
+func (f *fakeEnvs) SetResources(ctx context.Context, id int64, o domain.ResourceOverrides) (domain.Environment, error) {
+	e, err := f.Get(ctx, id)
+	if err != nil {
+		return e, err
+	}
+	e.Resources = o
+	return e, nil
 }
