@@ -6,7 +6,7 @@ type NavItem = { label: string; to?: string; adminOnly?: boolean }
 
 const navItems: NavItem[] = [
   { label: 'Status', to: '/' },
-  { label: 'Apps' },
+  { label: 'Apps', to: '/apps' },
   { label: 'Environments' },
   { label: 'Deployments' },
   { label: 'API tokens', to: '/tokens' },
@@ -26,7 +26,7 @@ export function Layout() {
           <nav className="flex flex-1 gap-4 text-sm">
             {navItems.filter((item) => !item.adminOnly || user.isAdmin).map((item) =>
               item.to ? (
-                <NavLink key={item.label} to={item.to} end
+                <NavLink key={item.label} to={item.to} end={item.to === '/'}
                   className={({ isActive }) => (isActive ? 'font-medium text-slate-900' : 'text-slate-500 hover:text-slate-900')}>
                   {item.label}
                 </NavLink>

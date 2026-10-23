@@ -2,6 +2,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { AuthProvider } from './auth/AuthProvider'
 import { useAuth } from './auth/AuthContext'
 import { Layout } from './components/Layout'
+import { AppDetailPage } from './pages/apps/AppDetailPage'
+import { AppsPage } from './pages/apps/AppsPage'
 import { AuditPage } from './pages/AuditPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
@@ -23,6 +25,8 @@ function Gate() {
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<HomePage />} />
+            <Route path="apps" element={<AppsPage />} />
+            <Route path="apps/:id" element={<AppDetailPage />} />
             <Route path="tokens" element={<TokensPage />} />
             {state.user.isAdmin && <Route path="users" element={<UsersPage />} />}
             {state.user.isAdmin && <Route path="audit" element={<AuditPage />} />}
