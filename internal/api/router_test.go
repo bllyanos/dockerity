@@ -57,9 +57,9 @@ func TestHealthFailingCheck(t *testing.T) {
 	}
 }
 
-func TestUnknownAPIRouteIsJSON404(t *testing.T) {
+func TestUnknownAPIRouteRequiresAuth(t *testing.T) {
 	rec, body := get(t, newTestRouter(), APIPrefix+"/nope")
-	if rec.Code != http.StatusNotFound || body["error"] != "not found" {
+	if rec.Code != http.StatusUnauthorized || body["error"] != "unauthorized" {
 		t.Fatalf("got %d %v", rec.Code, body)
 	}
 }

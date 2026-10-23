@@ -5,6 +5,9 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"time"
+
+	"github.com/bllyanos/dockerity/internal/auth/ratelimit"
 )
 
 // APIPrefix is the path prefix of the versioned JSON API.
@@ -18,6 +21,10 @@ type Deps struct {
 	UI fs.FS
 	// Setup serves the first-run setup endpoints. When nil, they are not registered.
 	Setup SetupService
+	// Sessions authenticates requests. When nil, every protected route returns 401.
+	Sessions SessionService
+	// LoginLimiter throttles failed logins. Defaults to 10 failures per 15 minutes per user and per IP.
+	LoginLimiter *ratelimit.Limiter
 }
 
 // NewRouter builds the top-level HTTP handler.
@@ -25,15 +32,8 @@ func NewRouter(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /healthz", healthHandler(d.HealthChecks))
 
-	notFound := func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, http.StatusNotFound, "not found")
-	}
-	apiMux := http.NewServeMux()
-	apiMux.HandleFunc("/", notFound)
-	if d.Setup != nil {
-		setupHandlers{logger: d.Logger, setup: d.Setup}.register(apiMux)
-	}
-	mux.Handle(APIPrefix+"/", http.StripPrefix(APIPrefix, apiMux))
+	rt := apiRoutes(d)
+	mux.Handle(APIPrefix+"/", http.StripPrefix(APIPrefix, requireAuth(d.Logger, rt, d.Sessions)))
 	// Unknown API paths must not fall through to the UI.
 	mux.HandleFunc("/api/", notFound)
 
@@ -41,5 +41,29 @@ func NewRouter(d Deps) http.Handler {
 		mux.Handle("/", spaHandler(d.UI))
 	}
 
-	return logRequests(d.Logger, mux)
+	csrf := http.NewCrossOriginProtection()
+	return logRequests(d.Logger, csrf.Handler(mux))
+}
+
+// apiRoutes registers every /api/v1 route. Routes are protected unless
+// registered with handlePublic.
+func apiRoutes(d Deps) *routes {
+	rt := newRoutes()
+	rt.handle("/", notFound)
+
+	if d.Setup != nil {
+		setupHandlers{logger: d.Logger, setup: d.Setup, sessions: d.Sessions}.register(rt)
+	}
+	if d.Sessions != nil {
+		limiter := d.LoginLimiter
+		if limiter == nil {
+			limiter = ratelimit.New(10, 15*time.Minute)
+		}
+		authHandlers{logger: d.Logger, sessions: d.Sessions, limiter: limiter}.register(rt)
+	}
+	return rt
+}
+
+func notFound(w http.ResponseWriter, _ *http.Request) {
+	writeError(w, http.StatusNotFound, "not found")
 }

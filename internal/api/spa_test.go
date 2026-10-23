@@ -53,9 +53,9 @@ func TestSPAFallsBackToIndex(t *testing.T) {
 }
 
 func TestSPADoesNotSwallowAPI(t *testing.T) {
-	for _, p := range []string{"/api/v1/nope", "/api/other"} {
+	for p, code := range map[string]int{"/api/v1/nope": http.StatusUnauthorized, "/api/other": http.StatusNotFound} {
 		rec := serve(newUIRouter(builtUI), p)
-		if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `"error"`) {
+		if rec.Code != code || !strings.Contains(rec.Body.String(), `"error"`) {
 			t.Errorf("%s: got %d %q", p, rec.Code, rec.Body)
 		}
 	}
