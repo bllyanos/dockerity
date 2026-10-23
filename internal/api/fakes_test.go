@@ -131,3 +131,37 @@ func (f *fakeTokens) Authenticate(_ context.Context, raw string) (auth.Principal
 	f.used[id] = true
 	return auth.Principal{User: f.users[f.tokens[id-1].UserID], APITokenID: id}, first, nil
 }
+
+// fakeUserAdmin wraps a slice of users.
+type fakeUserAdmin struct{ users []domain.User }
+
+func (f *fakeUserAdmin) List(context.Context) ([]domain.User, error) { return f.users, nil }
+
+func (f *fakeUserAdmin) Create(_ context.Context, username, _ string, isAdmin bool) (domain.User, error) {
+	u := domain.User{ID: int64(len(f.users) + 1), Username: username, IsAdmin: isAdmin, PasswordHash: "secret-hash"}
+	f.users = append(f.users, u)
+	return u, nil
+}
+
+func (f *fakeUserAdmin) SetDisabled(_ context.Context, actor domain.User, id int64, disabled bool) (domain.User, error) {
+	if actor.ID == id && disabled {
+		return domain.User{}, domain.Invalid("id", "you cannot disable your own account")
+	}
+	if id < 1 || int(id) > len(f.users) {
+		return domain.User{}, domain.ErrNotFound
+	}
+	if disabled {
+		now := time.Now()
+		f.users[id-1].DisabledAt = &now
+	} else {
+		f.users[id-1].DisabledAt = nil
+	}
+	return f.users[id-1], nil
+}
+
+func (f *fakeUserAdmin) ResetPassword(_ context.Context, id int64, _ string) (domain.User, error) {
+	if id < 1 || int(id) > len(f.users) {
+		return domain.User{}, domain.ErrNotFound
+	}
+	return f.users[id-1], nil
+}
