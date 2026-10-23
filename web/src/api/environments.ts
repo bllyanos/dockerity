@@ -59,3 +59,23 @@ export type EnvContainer = {
 export async function listEnvContainers(id: number): Promise<EnvContainer[]> {
   return (await api<{ containers: EnvContainer[] }>(`/environments/${id}/containers`)).containers
 }
+
+export type DriftKind = 'missing' | 'stopped' | 'extra' | 'dangling_route'
+
+export type DriftItem = {
+  kind: DriftKind
+  service: string
+  container: string
+  detail: string
+}
+
+/** How the environment differs from its current deployment, per the reconciler. */
+export type Drift = {
+  items: DriftItem[]
+  /** Stopped containers the reconciler removes on its next round. */
+  leftovers: number
+}
+
+export async function getDrift(id: number): Promise<Drift> {
+  return api<Drift>(`/environments/${id}/drift`)
+}
