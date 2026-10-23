@@ -18,6 +18,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/domain"
 	"github.com/bllyanos/dockerity/internal/routing"
 	"github.com/bllyanos/dockerity/internal/secrets"
+	"github.com/bllyanos/dockerity/internal/spec"
 )
 
 // fakeDocker keeps containers in memory and records operations.
@@ -345,7 +346,8 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f.exec = &Executor{
 		Store: f.store, Envs: staticEnv{},
-		Specs: specVersions{1: appSpec, 2: strings.Replace(appSpec, "  web:", "  api:", 1), 3: blueGreenSpec},
+		Specs: specVersions{1: appSpec, 2: strings.Replace(appSpec, "  web:", "  api:", 1), 3: blueGreenSpec,
+			4: statefulSpec, 5: strings.Replace(statefulSpec, "mysql:8.4", "mysql:9.1", 1)},
 		Builds: buildImages{
 			1: {{Service: "migrate", ImageTag: "dkt/shop/migrate:a"}, {Service: "web", ImageTag: "dkt/shop/web:a"}},
 			2: {{Service: "migrate", ImageTag: "dkt/shop/migrate:b"}, {Service: "web", ImageTag: "dkt/shop/web:b"}, {Service: "api", ImageTag: "dkt/shop/api:b"}},
@@ -626,5 +628,80 @@ func TestBlueGreenAbortKeepsOldServing(t *testing.T) {
 	log, _ := f.logs.Read(2)
 	if !strings.Contains(string(log), "Aborted: dkt-shop-staging-web-d1 keeps serving") {
 		t.Fatalf("log:\n%s", log)
+	}
+}
+
+const statefulSpec = `
+services:
+  db:
+    kind: stateful
+    image: mysql:8.4
+    volumes:
+      data: /var/lib/mysql
+`
+
+// fakeBackups records archives in the Docker op log.
+type fakeBackups struct {
+	docker *fakeDocker
+	fail   bool
+}
+
+func (b *fakeBackups) Archive(_ context.Context, env domain.Environment, svc spec.Service, reason domain.BackupReason) ([]domain.Backup, error) {
+	if b.fail {
+		return nil, errors.New("disk full")
+	}
+	var out []domain.Backup
+	b.docker.mu.Lock()
+	defer b.docker.mu.Unlock()
+	for _, v := range svc.Volumes {
+		vol := domain.VolumeName(env.AppName, env.Name, svc.Name, v.Name)
+		b.docker.op("backup %s %s", vol, reason)
+		out = append(out, domain.Backup{Volume: vol, File: vol + ".tar.gz"})
+	}
+	return out, nil
+}
+
+func TestStatefulImageChangeBacksUpBetweenStopAndStart(t *testing.T) {
+	f := newFixture(t)
+	f.exec.Backups = &fakeBackups{docker: f.docker}
+	f.deploy(1, 1, 4)
+	f.docker.ops = nil
+	if d := f.deploy(2, 1, 5); d.Status != domain.DeploymentSucceeded {
+		t.Fatalf("status %s: %s", d.Status, d.Error)
+	}
+	want := strings.Join([]string{
+		"stop dkt-shop-staging-db-d1",
+		"backup dkt-shop-staging-db-data image-change",
+		"remove dkt-shop-staging-db-d1",
+		"create dkt-shop-staging-db-d2",
+		"start dkt-shop-staging-db-d2",
+	}, "\n")
+	if ops := strings.Join(f.docker.ops, "\n"); !strings.Contains(ops, want) {
+		t.Fatalf("ops:\n%s\nwant:\n%s", ops, want)
+	}
+}
+
+func TestNoBackupWhenStatefulImageIsUnchanged(t *testing.T) {
+	f := newFixture(t)
+	f.exec.Backups = &fakeBackups{docker: f.docker}
+	f.deploy(1, 1, 4)
+	f.deploy(2, 1, 4)
+	for _, op := range f.docker.ops {
+		if strings.HasPrefix(op, "backup") {
+			t.Fatalf("unexpected backup: %v", f.docker.ops)
+		}
+	}
+}
+
+func TestFailedBackupRestartsOldStatefulContainer(t *testing.T) {
+	f := newFixture(t)
+	f.exec.Backups = &fakeBackups{docker: f.docker, fail: true}
+	f.deploy(1, 1, 4)
+	d := f.deploy(2, 1, 5)
+	if d.Status != domain.DeploymentFailed || !strings.Contains(d.Error, "backup before image change: disk full") {
+		t.Fatalf("status %s: %s", d.Status, d.Error)
+	}
+	if got := f.docker.running("db"); len(got) != 1 || got[0] != "dkt-shop-staging-db-d1" {
+		t.Fatalf("old database must run again, got %v", got)
 	}
 }
