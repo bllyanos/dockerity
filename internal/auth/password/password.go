@@ -41,7 +41,7 @@ var b64 = base64.RawStdEncoding
 // Validate checks a new password against the policy.
 func Validate(pw string) error {
 	if utf8.RuneCountInString(pw) < MinLength {
-		return fmt.Errorf("password must be at least %d characters", MinLength)
+		return fmt.Errorf("must be at least %d characters", MinLength)
 	}
 	return nil
 }
