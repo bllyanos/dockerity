@@ -48,3 +48,26 @@ func TestDeploymentPreviewAPI(t *testing.T) {
 		t.Fatalf("missing build: %d", rec.Code)
 	}
 }
+
+func TestRollbackAPI(t *testing.T) {
+	d := fullDeps()
+	fd := d.Deployments.(*fakeDeployments)
+	fd.deps = []domain.Deployment{{ID: 1, EnvID: 1, BuildID: 7, SpecVersion: 2, Status: domain.DeploymentSucceeded}}
+	log := d.Audit.(*fakeAudit)
+	h := NewRouter(d)
+	raw, _, _ := d.Tokens.(*fakeTokens).Create(t.Context(), alice, "t")
+
+	if rec := bearer(h, http.MethodPost, APIPrefix+"/deployments/1/rollback/preview", raw, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"warning"`) {
+		t.Fatalf("preview: %d %s", rec.Code, rec.Body)
+	}
+	rec := bearer(h, http.MethodPost, APIPrefix+"/deployments/1/rollback", raw, "")
+	if rec.Code != http.StatusAccepted || !strings.Contains(rec.Body.String(), `"buildId":7`) {
+		t.Fatalf("rollback: %d %s", rec.Code, rec.Body)
+	}
+	if rec = bearer(h, http.MethodPost, APIPrefix+"/deployments/9/rollback", raw, ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("missing: %d", rec.Code)
+	}
+	if got := log.actions(); got[len(got)-1] != domain.AuditDeploymentRollback {
+		t.Fatalf("audit %v", got)
+	}
+}

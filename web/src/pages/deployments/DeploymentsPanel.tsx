@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { listBuilds } from '../../api/builds'
-import { listDeployments, previewDeployment, startDeployment, type DeployWarning } from '../../api/deployments'
+import { listDeployments, previewDeployment, previewRollback, rollback, startDeployment, type DeployWarning } from '../../api/deployments'
 import { StatusBadge } from '../../components/StatusBadge'
 import { Cell, Table } from '../../components/Table'
 import { Button } from '../../components/form/Button'
@@ -23,25 +23,37 @@ export function DeploymentsPanel({ envId, appId }: Props) {
   const [buildId, setBuildId] = useState<number | null>(null)
   const selected = buildId ?? builds.data?.[0]?.id ?? null
 
-  const [warning, setWarning] = useState<DeployWarning | null>(null)
+  // A pending action waits for confirmation when its preview shows downtime.
+  const [pending, setPending] = useState<{ warning: DeployWarning; run: () => Promise<void> } | null>(null)
 
-  async function start(buildId: number) {
-    const d = await startDeployment(envId, buildId)
-    navigate(`/deployments/${d.id}`)
-  }
-
-  // Preview first; ask for confirmation only when the plan has downtime.
-  const deploy = useSubmit(async () => {
-    if (selected === null) throw new Error('Pick a build to deploy')
-    const w = await previewDeployment(envId, selected)
+  async function guarded(preview: () => Promise<DeployWarning>, run: () => Promise<void>) {
+    const w = await preview()
     if (w.downtime) {
-      setWarning(w)
+      setPending({ warning: w, run })
       return
     }
-    await start(selected)
+    await run()
+  }
+
+  const deploy = useSubmit(async () => {
+    if (selected === null) throw new Error('Pick a build to deploy')
+    await guarded(
+      () => previewDeployment(envId, selected),
+      async () => navigate(`/deployments/${(await startDeployment(envId, selected)).id}`),
+    )
+  })
+  // A ref, not state: the action must see the target set in the same click.
+  const rollbackTo = useRef<number | null>(null)
+  const rollbackAction = useSubmit(async () => {
+    const target = rollbackTo.current
+    if (target === null) return
+    await guarded(
+      () => previewRollback(target),
+      async () => navigate(`/deployments/${(await rollback(target)).id}`),
+    )
   })
   const confirm = useSubmit(async () => {
-    if (selected !== null) await start(selected)
+    if (pending) await pending.run()
   })
 
   const current = deployments.data?.find((d) => d.current)
@@ -67,14 +79,14 @@ export function DeploymentsPanel({ envId, appId }: Props) {
         <Button type="submit" disabled={deploy.pending || selected === null}>Deploy</Button>
         {builds.data?.length === 0 && <span className="text-sm text-slate-500">No succeeded builds yet.</span>}
       </form>
-      {warning && (
-        <DowntimeWarning warning={warning} pending={confirm.pending}
+      {pending && (
+        <DowntimeWarning warning={pending.warning} pending={confirm.pending}
           onConfirm={() => void confirm.run()}
-          onCancel={() => setWarning(null)} />
+          onCancel={() => setPending(null)} />
       )}
-      <ErrorMessage error={deploy.error ?? confirm.error ?? builds.error ?? deployments.error} />
+      <ErrorMessage error={deploy.error ?? rollbackAction.error ?? confirm.error ?? builds.error ?? deployments.error} />
       {deployments.data && deployments.data.length > 0 && (
-        <Table headers={['#', 'Status', 'Build', 'Spec', 'Secrets', 'Started']}>
+        <Table headers={['#', 'Status', 'Build', 'Spec', 'Secrets', 'Started', '']}>
           {deployments.data.map((d) => (
             <tr key={d.id}>
               <Cell>
@@ -86,6 +98,14 @@ export function DeploymentsPanel({ envId, appId }: Props) {
               <Cell>v{d.specVersion}</Cell>
               <Cell>v{d.secretVersion}</Cell>
               <Cell>{formatDateTime(d.startedAt ?? d.createdAt)}</Cell>
+              <Cell className="text-right">
+                {d.status === 'succeeded' && !d.current && (
+                  <Button variant="secondary" disabled={rollbackAction.pending}
+                    onClick={() => { rollbackTo.current = d.id; void rollbackAction.run() }}>
+                    Roll back to this
+                  </Button>
+                )}
+              </Cell>
             </tr>
           ))}
         </Table>

@@ -66,3 +66,13 @@ export type DeployWarning = { downtime: boolean; services: WarningService[] }
 export async function previewDeployment(envId: number, buildId: number): Promise<DeployWarning> {
   return (await api<{ warning: DeployWarning }>(`/environments/${envId}/deployments/preview`, { method: 'POST', body: { buildId } })).warning
 }
+
+/** Explains what rolling back to deployment id would do. */
+export async function previewRollback(id: number): Promise<DeployWarning> {
+  return (await api<{ warning: DeployWarning }>(`/deployments/${id}/rollback/preview`, { method: 'POST' })).warning
+}
+
+/** Deploys again the build, spec and secrets that deployment id ran. */
+export async function rollback(id: number): Promise<Deployment> {
+  return (await api<{ deployment: Deployment }>(`/deployments/${id}/rollback`, { method: 'POST' })).deployment
+}

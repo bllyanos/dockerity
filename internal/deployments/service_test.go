@@ -185,3 +185,42 @@ func TestStartExtendsTheEnvironment(t *testing.T) {
 		t.Fatalf("extended %v", ext.ids)
 	}
 }
+
+func TestRollback(t *testing.T) {
+	s, r := newService(9)
+	store := s.Store.(*memStore)
+	store.deps = []domain.Deployment{
+		{ID: 1, EnvID: 1, BuildID: 3, SpecVersion: 2, SecretVersion: 5, Status: domain.DeploymentSucceeded},
+		{ID: 2, EnvID: 1, BuildID: 4, SpecVersion: 4, SecretVersion: 9, Status: domain.DeploymentFailed},
+	}
+	d, err := s.Rollback(context.Background(), 1, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.BuildID != 3 || d.SpecVersion != 2 || d.SecretVersion != 5 || d.ID != 3 || len(r.submitted) != 1 {
+		t.Fatalf("rollback %+v submitted %v", d, r.submitted)
+	}
+	if _, err := s.Rollback(context.Background(), 1, nil); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("lock: %v", err)
+	}
+	var ve *domain.ValidationError
+	if _, err := s.Rollback(context.Background(), 2, nil); !errors.As(err, &ve) {
+		t.Fatalf("failed target: %v", err)
+	}
+	if _, err := s.Rollback(context.Background(), 99, nil); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("missing: %v", err)
+	}
+}
+
+func TestPreviewRollbackUsesTheOldVersions(t *testing.T) {
+	s, _ := newService(9)
+	p := &fakePreviewer{}
+	s.Previewer, s.Backups = p, latestBackups{}
+	s.Store.(*memStore).deps = []domain.Deployment{{ID: 1, EnvID: 1, BuildID: 3, SpecVersion: 2, SecretVersion: 5, Status: domain.DeploymentSucceeded}}
+	if _, err := s.PreviewRollback(context.Background(), 1); err != nil {
+		t.Fatal(err)
+	}
+	if p.got.BuildID != 3 || p.got.SpecVersion != 2 || p.got.SecretVersion != 5 {
+		t.Fatalf("draft %+v", p.got)
+	}
+}
