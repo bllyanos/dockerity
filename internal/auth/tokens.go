@@ -56,7 +56,7 @@ func (s *Tokens) List(ctx context.Context, userID int64) ([]domain.APIToken, err
 func (s *Tokens) Revoke(ctx context.Context, userID, id int64) (domain.APIToken, error) {
 	t, err := s.Store.RevokeAPIToken(ctx, userID, id, s.Now().UTC())
 	if errors.Is(err, domain.ErrNotFound) {
-		return domain.APIToken{}, errors.Join(errors.New("token not found or already revoked"), domain.ErrNotFound)
+		return domain.APIToken{}, domain.NotFoundf("token not found or already revoked")
 	}
 	return t, err
 }

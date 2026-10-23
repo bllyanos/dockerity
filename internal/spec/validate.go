@@ -8,13 +8,10 @@ import (
 	"github.com/bllyanos/dockerity/internal/domain"
 )
 
-// Names end up in container, network and volume names, so they must be DNS labels.
-var (
-	namePattern    = regexp.MustCompile(`^[a-z]([a-z0-9-]{0,30}[a-z0-9])?$`)
-	envNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-)
+var envNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-const nameRule = "must be 1 to 32 lowercase letters, digits or '-', starting with a letter and not ending with '-'"
+// Names end up in container, network and volume names, so they must be DNS labels.
+const nameRule = domain.LabelRule
 
 // Load parses and validates src.
 func Load(src []byte) (Spec, error) {
@@ -32,7 +29,7 @@ func Load(src []byte) (Spec, error) {
 // every violation as Problems, sorted by position.
 func Validate(s Spec) error {
 	var ps Problems
-	if s.Name != "" && !namePattern.MatchString(s.Name) {
+	if s.Name != "" && !domain.IsDNSLabel(s.Name) {
 		ps.add(s.NamePos, "name %q %s", s.Name, nameRule)
 	}
 	if len(s.Services) == 0 {
@@ -49,7 +46,7 @@ func Validate(s Spec) error {
 }
 
 func validateService(ps *Problems, s Spec, svc Service) {
-	if !namePattern.MatchString(svc.Name) {
+	if !domain.IsDNSLabel(svc.Name) {
 		ps.add(svc.Pos, "service name %q %s", svc.Name, nameRule)
 	}
 	validateKind(ps, svc)
@@ -159,7 +156,7 @@ func validateVolumes(ps *Problems, svc Service) {
 	}
 	paths := map[string]bool{}
 	for _, v := range svc.Volumes {
-		if !namePattern.MatchString(v.Name) {
+		if !domain.IsDNSLabel(v.Name) {
 			ps.add(v.Pos, "volume name %q %s", v.Name, nameRule)
 		}
 		if !path.IsAbs(v.Path) || path.Clean(v.Path) != v.Path || v.Path == "/" {
