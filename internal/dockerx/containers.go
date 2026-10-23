@@ -110,9 +110,10 @@ func (c *Client) CreateContainer(ctx context.Context, s containerspec.Spec) (str
 	for _, m := range s.Mounts {
 		host.Mounts = append(host.Mounts, mount.Mount{Type: mount.TypeVolume, Source: m.Volume, Target: m.Target})
 	}
-	netCfg := &network.NetworkingConfig{EndpointsConfig: map[string]*network.EndpointSettings{
-		s.Network: {Aliases: s.Aliases},
-	}}
+	netCfg := &network.NetworkingConfig{}
+	if s.Network != "" {
+		netCfg.EndpointsConfig = map[string]*network.EndpointSettings{s.Network: {Aliases: s.Aliases}}
+	}
 	res, err := c.api.ContainerCreate(ctx, client.ContainerCreateOptions{
 		Name: s.Name, Config: cfg, HostConfig: host, NetworkingConfig: netCfg,
 	})
