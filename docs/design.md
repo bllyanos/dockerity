@@ -229,6 +229,11 @@ context works without a buildx session (Docker 29, Go SDK `ImageBuild` with
   but it is deprecated, so it is not used.
 - Session features (secret mounts, SSH forwarding) would need a BuildKit session; out of
   scope for now.
+- Without a session, BuildKit may fail to resolve a base image that is not present locally
+  ("failed to resolve source metadata … no active sessions"). It worked on Docker 29 with
+  the containerd image store but failed on the CI runner. Dockerity therefore pulls every
+  `FROM` image through the Engine API before building (`build.BaseImages` parses the
+  Dockerfile, substituting global `ARG`s; `dockerx.PullImage` pulls).
 
 ### 6.1.1 Git access with deploy keys
 
