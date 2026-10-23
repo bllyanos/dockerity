@@ -33,6 +33,9 @@ type Executor struct {
 	Routes RouteFiles
 	// AllEnvs, when set, lets RebuildAllRoutes find every environment.
 	AllEnvs AllEnvs
+	// Backups archives stateful volumes before an image change. Required for
+	// deploying stateful services whose image changes.
+	Backups Backups
 	Logger  *slog.Logger
 	Now     func() time.Time
 	// Sleep waits for d or until ctx is done; nil uses a real timer.

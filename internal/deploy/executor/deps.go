@@ -11,6 +11,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/dockerx"
 	"github.com/bllyanos/dockerity/internal/domain"
 	"github.com/bllyanos/dockerity/internal/secrets"
+	"github.com/bllyanos/dockerity/internal/spec"
 )
 
 // Docker is the part of dockerx the executor uses.
@@ -58,4 +59,9 @@ type BuildImages interface {
 // Secrets decrypts secret set versions.
 type Secrets interface {
 	Values(ctx context.Context, scope secrets.Scope, version int) (map[string]string, error)
+}
+
+// Backups archives stateful volumes during deployments.
+type Backups interface {
+	Archive(ctx context.Context, env domain.Environment, svc spec.Service, reason domain.BackupReason) ([]domain.Backup, error)
 }

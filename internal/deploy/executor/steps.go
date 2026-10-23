@@ -28,7 +28,9 @@ func (e *Executor) step(ctx context.Context, j *job, st planner.Step, logs io.Wr
 			}
 		}
 		return nil, nil
-	case planner.StepStateful, planner.StepDeploy:
+	case planner.StepStateful:
+		return nil, e.replaceStateful(ctx, j, st, logs)
+	case planner.StepDeploy:
 		if st.Strategy == spec.StrategyBlueGreen {
 			return nil, e.blueGreen(ctx, j, st.Service, logs)
 		}
@@ -133,6 +135,61 @@ func names(cs []dockerx.ContainerInfo) string {
 		out[i] = c.Name
 	}
 	return strings.Join(out, ", ")
+}
+
+// replaceStateful recreates a stateful service: two containers never share
+// its volumes. When the image changes, the volumes are backed up between
+// stopping the old container and starting the new one; if the backup fails,
+// the old container is started again and the deployment fails.
+func (e *Executor) replaceStateful(ctx context.Context, j *job, st planner.Step, logs io.Writer) error {
+	if !st.ImageChanged {
+		return e.recreate(ctx, j, st.Service, logs)
+	}
+	cs := j.containers[st.Service]
+	svc, _ := j.spec.Service(st.Service)
+	old, err := e.others(ctx, j, st.Service)
+	if err != nil {
+		return err
+	}
+	if err := e.unroute(ctx, j, old); err != nil {
+		return err
+	}
+	for _, c := range old {
+		_, _ = fmt.Fprintf(logs, "Stopping old container %s\n", c.Name)
+		if err := e.Docker.StopContainer(ctx, c.ID, cs.StopTimeout); err != nil {
+			return err
+		}
+	}
+	_, _ = fmt.Fprintf(logs, "The image changes: backing up the volumes of %s\n", st.Service)
+	if err := e.backup(ctx, j, svc, logs); err != nil {
+		_, _ = fmt.Fprintln(logs, "Backup failed; starting the old container again")
+		for _, c := range old {
+			_ = e.Docker.StartContainer(context.Background(), c.ID)
+			delete(j.excluded, c.Name)
+		}
+		return fmt.Errorf("backup before image change: %w", err)
+	}
+	for _, c := range old {
+		if err := e.Docker.RemoveContainer(ctx, c.ID); err != nil {
+			return err
+		}
+	}
+	_, err = e.startHealthy(ctx, j, cs, logs)
+	return err
+}
+
+func (e *Executor) backup(ctx context.Context, j *job, svc spec.Service, logs io.Writer) error {
+	if e.Backups == nil {
+		return fmt.Errorf("backups are not configured")
+	}
+	list, err := e.Backups.Archive(ctx, j.env, svc, domain.BackupImageChange)
+	if err != nil {
+		return err
+	}
+	for _, b := range list {
+		_, _ = fmt.Fprintf(logs, "Backed up %s to %s (%d bytes)\n", b.Volume, b.File, b.SizeBytes)
+	}
+	return nil
 }
 
 // startHealthy creates and starts a container, waits until it is healthy and
