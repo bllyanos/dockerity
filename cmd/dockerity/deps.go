@@ -14,6 +14,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/backups"
 	"github.com/bllyanos/dockerity/internal/build"
 	"github.com/bllyanos/dockerity/internal/buildlog"
+	"github.com/bllyanos/dockerity/internal/cleanup"
 	"github.com/bllyanos/dockerity/internal/config"
 	"github.com/bllyanos/dockerity/internal/deploy/executor"
 	"github.com/bllyanos/dockerity/internal/deploykey"
@@ -46,6 +47,7 @@ type services struct {
 	envs         *environments.Service
 	deployKeys   deploykey.Store
 	git          *gitx.Client
+	workspace    *gitx.Workspace
 	buildLogs    buildlog.Store
 	buildHub     *buildlog.Hub
 	buildRunner  *build.Runner
@@ -73,6 +75,7 @@ func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *doc
 		Now:         time.Now,
 	}
 	s.git = &gitx.Client{HostKeys: sqlite.KnownHosts{DB: db}, Now: time.Now}
+	s.workspace = &gitx.Workspace{Root: filepath.Join(cfg.DataDir, "workspace"), Client: s.git}
 	s.buildLogs = buildlog.Store{Dir: filepath.Join(cfg.DataDir, "logs", "builds")}
 	s.buildHub = buildlog.NewHub()
 	s.buildRunner = &build.Runner{
@@ -80,7 +83,7 @@ func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *doc
 		Apps:    s.apps,
 		Specs:   s.specs,
 		Keys:    s.deployKeys,
-		Git:     &gitx.Workspace{Root: filepath.Join(cfg.DataDir, "workspace"), Client: s.git},
+		Git:     s.workspace,
 		Docker:  docker,
 		Logs:    s.buildLogs,
 		Hub:     s.buildHub,
@@ -263,4 +266,18 @@ type gcStore struct {
 	sqlite.Environments
 	sqlite.Deployments
 	sqlite.Builds
+}
+
+// cleaner expires old logs and prunes workspaces and the build cache.
+func (s *services) cleaner(cfg config.Config) *cleanup.Cleaner {
+	return &cleanup.Cleaner{
+		LogStores:        map[string]cleanup.Logs{"build": s.buildLogs, "deployment": s.deployLogs},
+		Retention:        cfg.LogRetention,
+		Apps:             s.apps,
+		Workspaces:       s.workspace,
+		BuildCache:       s.docker,
+		BuildCacheBudget: cfg.BuildCacheBytes,
+		Logger:           s.logger.With("component", "cleanup"),
+		Now:              time.Now,
+	}
 }
