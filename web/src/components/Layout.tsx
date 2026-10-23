@@ -2,13 +2,16 @@ import { NavLink, Outlet } from 'react-router'
 import { useAuth, useUser } from '../auth/AuthContext'
 import { Button } from './form/Button'
 
-type NavItem = { label: string; to?: string }
+type NavItem = { label: string; to?: string; adminOnly?: boolean }
 
 const navItems: NavItem[] = [
   { label: 'Status', to: '/' },
   { label: 'Apps' },
   { label: 'Environments' },
   { label: 'Deployments' },
+  { label: 'API tokens', to: '/tokens' },
+  { label: 'Users', to: '/users', adminOnly: true },
+  { label: 'Audit', to: '/audit', adminOnly: true },
 ]
 
 export function Layout() {
@@ -21,7 +24,7 @@ export function Layout() {
         <div className="mx-auto flex max-w-6xl items-center gap-8 px-6 py-4">
           <span className="text-lg font-semibold">Dockerity</span>
           <nav className="flex flex-1 gap-4 text-sm">
-            {navItems.map((item) =>
+            {navItems.filter((item) => !item.adminOnly || user.isAdmin).map((item) =>
               item.to ? (
                 <NavLink key={item.label} to={item.to} end
                   className={({ isActive }) => (isActive ? 'font-medium text-slate-900' : 'text-slate-500 hover:text-slate-900')}>
