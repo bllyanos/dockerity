@@ -8,10 +8,12 @@ import (
 	"time"
 
 	"github.com/bllyanos/dockerity/internal/auth/ratelimit"
+	"github.com/bllyanos/dockerity/internal/domain"
 )
 
 func fullDeps() Deps {
-	return Deps{Logger: discardLogger, Setup: &fakeSetup{}, Sessions: newFakeSessions(), Tokens: newFakeTokens(), Audit: &fakeAudit{}}
+	return Deps{Logger: discardLogger, Setup: &fakeSetup{}, Sessions: newFakeSessions(), Tokens: newFakeTokens(), Audit: &fakeAudit{},
+		Users: &fakeUserAdmin{users: []domain.User{alice}}}
 }
 
 // concretePath turns a mux pattern like "DELETE /tokens/{id}" into a method and path.

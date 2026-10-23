@@ -33,3 +33,11 @@ func ValidateUsername(s string) error {
 	}
 	return nil
 }
+
+// Audit actions for user management.
+const (
+	AuditUserCreated       = "user.created"
+	AuditUserDisabled      = "user.disabled"
+	AuditUserEnabled       = "user.enabled"
+	AuditUserPasswordReset = "user.password_reset"
+)

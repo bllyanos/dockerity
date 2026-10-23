@@ -29,6 +29,12 @@ func buildDeps(logger *slog.Logger, db *sql.DB, docker *dockerx.Client) api.Deps
 			Now:            time.Now,
 		},
 		Audit: sqlite.AuditLog{DB: db},
+		Users: &auth.UserAdmin{
+			Users:          users,
+			Credentials:    credentials{sqlite.Sessions{DB: db}, sqlite.APITokens{DB: db}},
+			PasswordParams: password.DefaultParams,
+			Now:            time.Now,
+		},
 		Tokens: &auth.Tokens{
 			Users: users,
 			Store: sqlite.APITokens{DB: db},
@@ -42,4 +48,10 @@ func buildDeps(logger *slog.Logger, db *sql.DB, docker *dockerx.Client) api.Deps
 			Now:            time.Now,
 		},
 	}
+}
+
+// credentials combines the stores that end a user's sessions and API tokens.
+type credentials struct {
+	sqlite.Sessions
+	sqlite.APITokens
 }

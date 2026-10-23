@@ -83,9 +83,8 @@ func (h tokenHandlers) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h tokenHandlers) revoke(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "id: must be an integer")
+	id, ok := pathID(w, r)
+	if !ok {
 		return
 	}
 	p, _ := auth.PrincipalFrom(r.Context())

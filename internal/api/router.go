@@ -25,6 +25,8 @@ type Deps struct {
 	Sessions SessionService
 	// Tokens manages API tokens. When nil, bearer auth is rejected and token routes are not registered.
 	Tokens TokenService
+	// Users manages users (admin only). When nil, user routes are not registered.
+	Users UserAdminService
 	// Audit stores the audit log. When nil, nothing is recorded and the audit API is not registered.
 	Audit AuditLog
 	// LoginLimiter throttles failed logins. Defaults to 10 failures per 15 minutes per user and per IP.
@@ -69,6 +71,9 @@ func apiRoutes(d Deps) *routes {
 			limiter = ratelimit.New(10, 15*time.Minute)
 		}
 		authHandlers{logger: d.Logger, sessions: d.Sessions, limiter: limiter, audit: aud}.register(rt)
+	}
+	if d.Users != nil {
+		userHandlers{logger: d.Logger, users: d.Users, audit: aud}.register(rt)
 	}
 	if d.Tokens != nil {
 		tokenHandlers{logger: d.Logger, tokens: d.Tokens, audit: aud}.register(rt)
