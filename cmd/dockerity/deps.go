@@ -106,6 +106,7 @@ func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *doc
 		Now:           time.Now,
 	}
 	s.deployRunner.Exec.Backups = s.backups
+	s.envs.Backups = s.backups
 	return s
 }
 

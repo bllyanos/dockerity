@@ -304,7 +304,7 @@ func (f *fakeEnvs) UpdateDomain(ctx context.Context, id int64, host string) (dom
 	return e, nil
 }
 
-func (f *fakeEnvs) Delete(ctx context.Context, id int64) (domain.Environment, error) {
+func (f *fakeEnvs) Delete(ctx context.Context, id int64, _ bool) (domain.Environment, error) {
 	return f.Get(ctx, id)
 }
 

@@ -16,7 +16,7 @@ type EnvironmentService interface {
 	Get(ctx context.Context, id int64) (domain.Environment, error)
 	CreatePermanent(ctx context.Context, appID int64, name, host string) (domain.Environment, error)
 	UpdateDomain(ctx context.Context, id int64, host string) (domain.Environment, error)
-	Delete(ctx context.Context, id int64) (domain.Environment, error)
+	Delete(ctx context.Context, id int64, skipBackup bool) (domain.Environment, error)
 }
 
 type environmentHandlers struct {
@@ -134,11 +134,14 @@ func (h environmentHandlers) delete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	e, err := h.envs.Delete(r.Context(), id)
+	skipBackup := r.URL.Query().Get("skipBackup") == "true"
+	e, err := h.envs.Delete(r.Context(), id, skipBackup)
 	if err != nil {
 		writeServiceError(w, r, h.logger, err)
 		return
 	}
-	h.audit.record(r, envEvent(domain.AuditEnvironmentDeleted, e))
+	ev := envEvent(domain.AuditEnvironmentDeleted, e)
+	ev.Metadata["skip_backup"] = strconv.FormatBool(skipBackup)
+	h.audit.record(r, ev)
 	w.WriteHeader(http.StatusNoContent)
 }

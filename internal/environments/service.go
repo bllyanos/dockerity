@@ -4,6 +4,7 @@ package environments
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -29,9 +30,14 @@ type Service struct {
 	Deployments interface {
 		ListDeployments(ctx context.Context, envID int64, limit int) ([]domain.Deployment, error)
 	}
-	// Runtime, when set, removes the environment's containers and network on delete.
+	// Runtime, when set, removes the environment's containers, network and volumes on delete.
 	Runtime interface {
 		Remove(ctx context.Context, app, env string) error
+		RemoveVolumes(ctx context.Context, app, env string) error
+	}
+	// Backups, when set, archives stateful volumes before deletion.
+	Backups interface {
+		ArchiveEnvironment(ctx context.Context, env domain.Environment) ([]domain.Backup, error)
 	}
 	// Routes, when set, rewrites the environment's routes after a domain change.
 	Routes interface {
@@ -104,9 +110,11 @@ func (s *Service) UpdateDomain(ctx context.Context, id int64, host string) (doma
 	return e, nil
 }
 
-// Delete stops the environment's containers, removes its network and deletes
-// the record. It is refused while a deployment is in progress.
-func (s *Service) Delete(ctx context.Context, id int64) (domain.Environment, error) {
+// Delete removes an environment: its routes, containers and network, then a
+// backup of its stateful volumes (unless skipBackup), then the volumes and the
+// record. It is refused while a deployment is in progress. A failed backup
+// stops the deletion before any volume is removed.
+func (s *Service) Delete(ctx context.Context, id int64, skipBackup bool) (domain.Environment, error) {
 	e, err := s.Get(ctx, id)
 	if err != nil {
 		return domain.Environment{}, err
@@ -122,6 +130,16 @@ func (s *Service) Delete(ctx context.Context, id int64) (domain.Environment, err
 	}
 	if s.Runtime != nil {
 		if err := s.Runtime.Remove(ctx, e.AppName, e.Name); err != nil {
+			return domain.Environment{}, err
+		}
+	}
+	if !skipBackup && s.Backups != nil {
+		if _, err := s.Backups.ArchiveEnvironment(ctx, e); err != nil {
+			return domain.Environment{}, fmt.Errorf("back up %s before deleting it (its volumes are kept): %w", e.Name, err)
+		}
+	}
+	if s.Runtime != nil {
+		if err := s.Runtime.RemoveVolumes(ctx, e.AppName, e.Name); err != nil {
 			return domain.Environment{}, err
 		}
 	}
