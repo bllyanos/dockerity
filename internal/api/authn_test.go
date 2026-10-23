@@ -11,7 +11,7 @@ import (
 )
 
 func fullDeps() Deps {
-	return Deps{Logger: discardLogger, Setup: &fakeSetup{}, Sessions: newFakeSessions(), Audit: &fakeAudit{}}
+	return Deps{Logger: discardLogger, Setup: &fakeSetup{}, Sessions: newFakeSessions(), Tokens: newFakeTokens(), Audit: &fakeAudit{}}
 }
 
 // concretePath turns a mux pattern like "DELETE /tokens/{id}" into a method and path.
@@ -56,6 +56,13 @@ func TestEveryProtectedRouteRequiresAuth(t *testing.T) {
 		h.ServeHTTP(rec, req)
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("%s %s with forged cookie: got %d", method, path, rec.Code)
+		}
+		req = httptest.NewRequest(method, path, strings.NewReader("{}"))
+		req.Header.Set("Authorization", "Bearer dkta_forged")
+		rec = httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s %s with forged bearer: got %d", method, path, rec.Code)
 		}
 	}
 }

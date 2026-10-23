@@ -23,6 +23,8 @@ type Deps struct {
 	Setup SetupService
 	// Sessions authenticates requests. When nil, every protected route returns 401.
 	Sessions SessionService
+	// Tokens manages API tokens. When nil, bearer auth is rejected and token routes are not registered.
+	Tokens TokenService
 	// Audit stores the audit log. When nil, nothing is recorded and the audit API is not registered.
 	Audit AuditLog
 	// LoginLimiter throttles failed logins. Defaults to 10 failures per 15 minutes per user and per IP.
@@ -35,7 +37,8 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("GET /healthz", healthHandler(d.HealthChecks))
 
 	rt := apiRoutes(d)
-	mux.Handle(APIPrefix+"/", http.StripPrefix(APIPrefix, requireAuth(d.Logger, rt, d.Sessions)))
+	guard := authGuard{logger: d.Logger, routes: rt, sessions: d.Sessions, tokens: d.Tokens, audit: newAuditor(d)}
+	mux.Handle(APIPrefix+"/", http.StripPrefix(APIPrefix, guard))
 	// Unknown API paths must not fall through to the UI.
 	mux.HandleFunc("/api/", notFound)
 
@@ -52,9 +55,8 @@ func NewRouter(d Deps) http.Handler {
 func apiRoutes(d Deps) *routes {
 	rt := newRoutes()
 	rt.handle("/", notFound)
-	aud := auditor{logger: d.Logger}
+	aud := newAuditor(d)
 	if d.Audit != nil {
-		aud.rec = d.Audit
 		auditHandlers{logger: d.Logger, log: d.Audit}.register(rt)
 	}
 
@@ -68,7 +70,18 @@ func apiRoutes(d Deps) *routes {
 		}
 		authHandlers{logger: d.Logger, sessions: d.Sessions, limiter: limiter, audit: aud}.register(rt)
 	}
+	if d.Tokens != nil {
+		tokenHandlers{logger: d.Logger, tokens: d.Tokens, audit: aud}.register(rt)
+	}
 	return rt
+}
+
+func newAuditor(d Deps) auditor {
+	a := auditor{logger: d.Logger}
+	if d.Audit != nil {
+		a.rec = d.Audit
+	}
+	return a
 }
 
 func notFound(w http.ResponseWriter, _ *http.Request) {

@@ -29,6 +29,11 @@ func buildDeps(logger *slog.Logger, db *sql.DB, docker *dockerx.Client) api.Deps
 			Now:            time.Now,
 		},
 		Audit: sqlite.AuditLog{DB: db},
+		Tokens: &auth.Tokens{
+			Users: users,
+			Store: sqlite.APITokens{DB: db},
+			Now:   time.Now,
+		},
 		Sessions: &auth.Sessions{
 			Users:          users,
 			Store:          sqlite.Sessions{DB: db},
