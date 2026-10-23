@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Environment variable names.
@@ -20,6 +21,10 @@ const (
 	EnvBuildWorkers  = "DOCKERITY_BUILD_WORKERS"
 	EnvTraefikDir    = "DOCKERITY_TRAEFIK_DYNAMIC_DIR"
 	EnvBackupsVolume = "DOCKERITY_BACKUPS_VOLUME"
+	// EnvLogRetentionDays is how long build and deployment logs are kept; 0 keeps them forever.
+	EnvLogRetentionDays = "DOCKERITY_LOG_RETENTION_DAYS"
+	// EnvBuildCacheGB is the BuildKit cache budget in GiB; 0 disables pruning.
+	EnvBuildCacheGB = "DOCKERITY_BUILD_CACHE_GB"
 )
 
 // Defaults match the bootstrap compose file (docs/design.md section 13).
@@ -30,6 +35,8 @@ const (
 	DefaultLogLevel      = "info"
 	DefaultBuildWorkers  = 1
 	DefaultBackupsVolume = "dockerity-backups"
+	DefaultLogRetention  = 30 * 24 * time.Hour
+	DefaultBuildCacheGB  = 20
 	maxBuildWorkers      = 16
 )
 
@@ -46,6 +53,10 @@ type Config struct {
 	TraefikDir string
 	// BackupsVolume is the Docker volume that holds backup archives.
 	BackupsVolume string
+	// LogRetention is how long logs are kept; zero keeps them forever.
+	LogRetention time.Duration
+	// BuildCacheBytes is the BuildKit cache budget; zero disables pruning.
+	BuildCacheBytes int64
 }
 
 // LookupFunc has the signature of os.LookupEnv.
@@ -62,11 +73,13 @@ func Load(lookup LookupFunc) (Config, error) {
 
 	level, levelErr := parseLevel(get(EnvLogLevel, DefaultLogLevel))
 	cfg := Config{
-		ListenAddr:    get(EnvListenAddr, DefaultListenAddr),
-		DataDir:       get(EnvDataDir, DefaultDataDir),
-		MasterKeyFile: get(EnvMasterKeyFile, DefaultMasterKeyFile),
-		LogLevel:      level,
-		BuildWorkers:  DefaultBuildWorkers,
+		ListenAddr:      get(EnvListenAddr, DefaultListenAddr),
+		DataDir:         get(EnvDataDir, DefaultDataDir),
+		MasterKeyFile:   get(EnvMasterKeyFile, DefaultMasterKeyFile),
+		LogLevel:        level,
+		BuildWorkers:    DefaultBuildWorkers,
+		LogRetention:    DefaultLogRetention,
+		BuildCacheBytes: DefaultBuildCacheGB << 30,
 	}
 	cfg.TraefikDir = get(EnvTraefikDir, filepath.Join(cfg.DataDir, "traefik"))
 	cfg.BackupsVolume = get(EnvBackupsVolume, DefaultBackupsVolume)
@@ -81,6 +94,22 @@ func Load(lookup LookupFunc) (Config, error) {
 			errs = append(errs, fmt.Errorf("%s: must be between 1 and %d", EnvBuildWorkers, maxBuildWorkers))
 		} else {
 			cfg.BuildWorkers = n
+		}
+	}
+	if v := get(EnvLogRetentionDays, ""); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			errs = append(errs, fmt.Errorf("%s: must be a number of days, 0 or more", EnvLogRetentionDays))
+		} else {
+			cfg.LogRetention = time.Duration(n) * 24 * time.Hour
+		}
+	}
+	if v := get(EnvBuildCacheGB, ""); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 0 || n > 1<<20 {
+			errs = append(errs, fmt.Errorf("%s: must be a number of GiB, 0 or more", EnvBuildCacheGB))
+		} else {
+			cfg.BuildCacheBytes = n << 30
 		}
 	}
 	if _, _, err := net.SplitHostPort(cfg.ListenAddr); err != nil {
