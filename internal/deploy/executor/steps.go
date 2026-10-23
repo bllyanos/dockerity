@@ -173,7 +173,7 @@ func (e *Executor) finish(ctx context.Context, j *job, logs io.Writer) error {
 	}
 	for _, c := range stale {
 		_, _ = fmt.Fprintf(logs, "Removing %s\n", c.Name)
-		if err := e.Docker.StopContainer(ctx, c.ID, containerspec.DefaultStop); err != nil {
+		if err := e.Docker.StopContainer(ctx, c.ID, spec.DefaultStopGracePeriod); err != nil {
 			return err
 		}
 		if err := e.Docker.RemoveContainer(ctx, c.ID); err != nil {
