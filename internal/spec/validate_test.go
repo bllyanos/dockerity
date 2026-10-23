@@ -64,6 +64,9 @@ func TestValidationRules(t *testing.T) {
 		{"bad memory", "services:\n  a:\n    kind: job\n    image: x\n    resources:\n      memory: lots\n", 6, `memory "lots"`},
 		{"bad cpus", "services:\n  a:\n    kind: job\n    image: x\n    resources:\n      cpus: 0\n", 6, `cpus "0"`},
 		{"no services", "name: x\nservices: {}\n", 1, "at least one service"},
+		{"drain too long", "services:\n  a:\n    kind: deployment\n    strategy: recreate\n    image: x\n    drain: 11m\n", 6, "drain must be at most"},
+		{"grace too long", "services:\n  a:\n    kind: job\n    image: x\n    stop_grace_period: 1h\n", 5, "stop_grace_period must be at most"},
+		{"drain on job", "services:\n  a:\n    kind: job\n    image: x\n    drain: 5s\n", 5, "no drain period"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

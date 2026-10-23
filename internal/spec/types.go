@@ -77,6 +77,10 @@ type Service struct {
 	HTTP        *HTTP
 	Healthcheck *Healthcheck
 	Resources   *Resources
+	// Drain is how long a replaced container stays up after leaving routing.
+	Drain time.Duration
+	// StopGracePeriod is how long a container gets between SIGTERM and SIGKILL.
+	StopGracePeriod time.Duration
 }
 
 // At returns the position of field, or of the service when the field is unset.

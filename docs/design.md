@@ -149,6 +149,8 @@ Top level: `name` and `services` (required). Service fields:
 | `http` | `port`, `path` | routed through Traefik |
 | `healthcheck` | `cmd` (list) or `http` (path), `interval`, `timeout`, `start_period`, `retries` | |
 | `resources` | `memory` (e.g. `512m`), `cpus` (e.g. `0.5`) | |
+| `drain` | duration, default `5s` | how long a replaced container keeps running after leaving routing |
+| `stop_grace_period` | duration, default `30s` | time between SIGTERM and SIGKILL |
 
 Compose fields that Dockerity owns are rejected with a hint: `container_name`, `ports`,
 `networks`, `network_mode`, `restart`, `deploy`. Unknown fields are errors. Every
@@ -272,8 +274,12 @@ per environment (environment lock).
 1. Start the new container next to the old one, same Traefik labels.
 2. Wait for the healthcheck. On failure, remove the new container and abort.
 3. Traefik now balances across both.
-4. Remove the old container from routing, wait for the drain period, send SIGTERM,
-   then remove it after the grace period.
+4. Remove the old container from routing (Dockerity rewrites the environment's Traefik
+   file), wait for the `drain` period, send SIGTERM, then remove it after the
+   `stop_grace_period`.
+
+If the new container fails its health check it is removed before it is ever routed, and
+the old one keeps serving; the deployment fails.
 
 Requirements on the app: handle SIGTERM gracefully, and keep migrations backward
 compatible (expand then contract), because old and new versions run together briefly.

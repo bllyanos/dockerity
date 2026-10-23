@@ -345,7 +345,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f.exec = &Executor{
 		Store: f.store, Envs: staticEnv{},
-		Specs: specVersions{1: appSpec, 2: strings.Replace(appSpec, "  web:", "  api:", 1)},
+		Specs: specVersions{1: appSpec, 2: strings.Replace(appSpec, "  web:", "  api:", 1), 3: blueGreenSpec},
 		Builds: buildImages{
 			1: {{Service: "migrate", ImageTag: "dkt/shop/migrate:a"}, {Service: "web", ImageTag: "dkt/shop/web:a"}},
 			2: {{Service: "migrate", ImageTag: "dkt/shop/migrate:b"}, {Service: "web", ImageTag: "dkt/shop/web:b"}, {Service: "api", ImageTag: "dkt/shop/api:b"}},
@@ -552,4 +552,79 @@ type allEnvs struct{}
 func (allEnvs) ListAllEnvironments(ctx context.Context) ([]domain.Environment, error) {
 	e, _ := staticEnv{}.Get(ctx, 1)
 	return []domain.Environment{e}, nil
+}
+
+const blueGreenSpec = `
+services:
+  web:
+    kind: deployment
+    image: shop-web
+    http:
+      port: 8080
+    healthcheck:
+      http: /healthz
+    drain: 2s
+    stop_grace_period: 7s
+`
+
+func (f *fixture) recordSleeps() {
+	f.exec.Sleep = func(_ context.Context, d time.Duration) error {
+		f.docker.mu.Lock()
+		f.docker.op("drain %s", d)
+		f.docker.mu.Unlock()
+		return nil
+	}
+}
+
+func TestBlueGreenSwitch(t *testing.T) {
+	f := newFixture(t).withRoutes()
+	f.recordSleeps()
+	if d := f.deploy(1, 1, 3); d.Status != domain.DeploymentSucceeded {
+		t.Fatalf("first deploy: %s", d.Error)
+	}
+	f.docker.ops = nil
+	if d := f.deploy(2, 1, 3); d.Status != domain.DeploymentSucceeded {
+		t.Fatalf("second deploy: %s", d.Error)
+	}
+	want := strings.Join([]string{
+		"create dkt-shop-staging-web-d2",
+		"start dkt-shop-staging-web-d2",
+		"routes [dkt-shop-staging-web-d1 dkt-shop-staging-web-d2]", // both serve
+		"routes [dkt-shop-staging-web-d2]",                         // old leaves routing
+		"drain 2s",
+		"stop dkt-shop-staging-web-d1",
+		"remove dkt-shop-staging-web-d1",
+	}, "\n")
+	if ops := strings.Join(f.docker.ops, "\n"); !strings.Contains(ops, want) {
+		t.Fatalf("blue-green order wrong:\n%s\nwant:\n%s", ops, want)
+	}
+	log, _ := f.logs.Read(2)
+	if !strings.Contains(string(log), "Blue-green: dkt-shop-staging-web-d2 replaces dkt-shop-staging-web-d1") ||
+		!strings.Contains(string(log), "Stopping dkt-shop-staging-web-d1 (grace 7s)") {
+		t.Fatalf("log:\n%s", log)
+	}
+}
+
+func TestBlueGreenAbortKeepsOldServing(t *testing.T) {
+	f := newFixture(t).withRoutes()
+	f.recordSleeps()
+	f.deploy(1, 1, 3)
+	f.docker.unhealthy["web"] = true
+	f.routes.writes = nil
+	d := f.deploy(2, 1, 3)
+	if d.Status != domain.DeploymentFailed {
+		t.Fatalf("status %s", d.Status)
+	}
+	for _, w := range f.routes.writes {
+		if strings.Contains(w, "web-d2") || !strings.Contains(w, "web-d1") {
+			t.Fatalf("routes during abort: %v", f.routes.writes)
+		}
+	}
+	if got := f.docker.running("web"); len(got) != 1 || got[0] != "dkt-shop-staging-web-d1" {
+		t.Fatalf("old version must keep running alone, got %v", got)
+	}
+	log, _ := f.logs.Read(2)
+	if !strings.Contains(string(log), "Aborted: dkt-shop-staging-web-d1 keeps serving") {
+		t.Fatalf("log:\n%s", log)
+	}
 }

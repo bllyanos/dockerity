@@ -35,6 +35,22 @@ type Executor struct {
 	AllEnvs AllEnvs
 	Logger  *slog.Logger
 	Now     func() time.Time
+	// Sleep waits for d or until ctx is done; nil uses a real timer.
+	Sleep func(ctx context.Context, d time.Duration) error
+}
+
+func (e *Executor) wait(ctx context.Context, d time.Duration) error {
+	if e.Sleep != nil {
+		return e.Sleep(ctx, d)
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }
 
 // job is everything resolved for one deployment.

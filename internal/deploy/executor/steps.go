@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 
 	"github.com/bllyanos/dockerity/internal/deploy/containerspec"
 	"github.com/bllyanos/dockerity/internal/deploy/planner"
@@ -29,7 +30,7 @@ func (e *Executor) step(ctx context.Context, j *job, st planner.Step, logs io.Wr
 		return nil, nil
 	case planner.StepStateful, planner.StepDeploy:
 		if st.Strategy == spec.StrategyBlueGreen {
-			_, _ = fmt.Fprintln(logs, "Blue-green is not available yet; using recreate.")
+			return nil, e.blueGreen(ctx, j, st.Service, logs)
 		}
 		return nil, e.recreate(ctx, j, st.Service, logs)
 	case planner.StepJob:
@@ -82,6 +83,56 @@ func (e *Executor) recreate(ctx context.Context, j *job, service string, logs io
 	}
 	_, err = e.startHealthy(ctx, j, cs, logs)
 	return err
+}
+
+// blueGreen replaces a service without downtime: the new container starts next
+// to the old ones and is routed once healthy, so both serve for a moment; then
+// the old ones leave routing, drain, get SIGTERM and are removed. If the new
+// container never becomes healthy it is removed and the old ones keep serving.
+func (e *Executor) blueGreen(ctx context.Context, j *job, service string, logs io.Writer) error {
+	cs := j.containers[service]
+	old, err := e.others(ctx, j, service)
+	if err != nil {
+		return err
+	}
+	if len(old) > 0 {
+		_, _ = fmt.Fprintf(logs, "Blue-green: %s replaces %s\n", cs.Name, names(old))
+	}
+	if _, err := e.startHealthy(ctx, j, cs, logs); err != nil {
+		if len(old) > 0 {
+			_, _ = fmt.Fprintf(logs, "Aborted: %s keeps serving\n", names(old))
+		}
+		return err
+	}
+	if len(old) == 0 {
+		return nil
+	}
+	_, _ = fmt.Fprintf(logs, "Both versions serve; taking %s out of routing\n", names(old))
+	if err := e.unroute(ctx, j, old); err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(logs, "Draining for %s\n", cs.Drain)
+	if err := e.wait(ctx, cs.Drain); err != nil {
+		return err
+	}
+	for _, c := range old {
+		_, _ = fmt.Fprintf(logs, "Stopping %s (grace %s)\n", c.Name, cs.StopTimeout)
+		if err := e.Docker.StopContainer(ctx, c.ID, cs.StopTimeout); err != nil {
+			return err
+		}
+		if err := e.Docker.RemoveContainer(ctx, c.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func names(cs []dockerx.ContainerInfo) string {
+	out := make([]string, len(cs))
+	for i, c := range cs {
+		out[i] = c.Name
+	}
+	return strings.Join(out, ", ")
 }
 
 // startHealthy creates and starts a container, waits until it is healthy and
@@ -173,7 +224,7 @@ func (e *Executor) finish(ctx context.Context, j *job, logs io.Writer) error {
 	}
 	for _, c := range stale {
 		_, _ = fmt.Fprintf(logs, "Removing %s\n", c.Name)
-		if err := e.Docker.StopContainer(ctx, c.ID, containerspec.DefaultStop); err != nil {
+		if err := e.Docker.StopContainer(ctx, c.ID, spec.DefaultStopGracePeriod); err != nil {
 			return err
 		}
 		if err := e.Docker.RemoveContainer(ctx, c.ID); err != nil {

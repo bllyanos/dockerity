@@ -33,7 +33,6 @@ const (
 	DefaultInterval = 10 * time.Second
 	DefaultTimeout  = 5 * time.Second
 	DefaultRetries  = 3
-	DefaultStop     = 30 * time.Second
 )
 
 // Mount attaches a named volume.
@@ -78,6 +77,8 @@ type Spec struct {
 	Healthcheck   *Healthcheck
 	HTTPCheck     *HTTPCheck
 	StopTimeout   time.Duration
+	// Drain is how long a replaced container keeps running after leaving routing.
+	Drain time.Duration
 }
 
 // String hides env values and files, which may hold secrets.
@@ -116,7 +117,8 @@ func Build(in Input) (Spec, error) {
 		Network:       domain.NetworkName(in.App, in.Env),
 		Aliases:       []string{svc.Name},
 		RestartPolicy: RestartUnlessStopped,
-		StopTimeout:   DefaultStop,
+		StopTimeout:   svc.EffectiveStopGracePeriod(),
+		Drain:         svc.EffectiveDrain(),
 	}
 	if svc.Kind == spec.KindJob {
 		s.RestartPolicy = RestartNo
