@@ -7,8 +7,21 @@ export type Environment = {
   name: string
   type: 'permanent' | 'ephemeral'
   domain: string
+  ttlSeconds: number
+  expiresAt: string | null
+  resources: Record<string, ResourceOverride>
   createdAt: string
   updatedAt: string
+}
+
+export type ResourceOverride = { memory?: string; cpus?: string }
+
+export async function extendEnvironment(id: number): Promise<Environment> {
+  return (await api<{ environment: Environment }>(`/environments/${id}/extend`, { method: 'POST' })).environment
+}
+
+export async function setEnvironmentResources(id: number, resources: Record<string, ResourceOverride>): Promise<Environment> {
+  return (await api<{ environment: Environment }>(`/environments/${id}/resources`, { method: 'PUT', body: { resources } })).environment
 }
 
 export async function listEnvironments(appId: number): Promise<Environment[]> {
