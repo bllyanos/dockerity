@@ -41,6 +41,8 @@ type Deps struct {
 	Backups BackupService
 	// EnvContainers lists environment containers. When nil, the route is not registered.
 	EnvContainers EnvContainerService
+	// Drift reports environment drift. When nil, the route is not registered.
+	Drift DriftService
 	// EnvSecrets manages environment secrets. When nil, secret routes are not registered.
 	EnvSecrets EnvSecretService
 	// Deployments starts and reads deployments. When nil, deployment routes are not registered.
@@ -121,6 +123,9 @@ func apiRoutes(d Deps) *routes {
 	}
 	if d.EnvContainers != nil {
 		envContainerHandlers{logger: d.Logger, containers: d.EnvContainers}.register(rt)
+	}
+	if d.Drift != nil {
+		driftHandlers{logger: d.Logger, drift: d.Drift}.register(rt)
 	}
 	if d.EnvSecrets != nil {
 		envSecretHandlers{logger: d.Logger, secrets: d.EnvSecrets, audit: aud}.register(rt)
