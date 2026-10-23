@@ -8,9 +8,12 @@ import (
 
 // Audit actions for environments.
 const (
-	AuditEnvironmentCreated = "environment.created"
-	AuditEnvironmentUpdated = "environment.updated"
-	AuditEnvironmentDeleted = "environment.deleted"
+	AuditEnvironmentCreated  = "environment.created"
+	AuditEnvironmentUpdated  = "environment.updated"
+	AuditEnvironmentDeleted  = "environment.deleted"
+	AuditEnvironmentSpawned  = "environment.spawned"
+	AuditEnvironmentExtended = "environment.extended"
+	AuditEnvironmentReaped   = "environment.reaped"
 )
 
 // EnvType tells permanent environments from ephemeral ones.
@@ -30,9 +33,17 @@ type Environment struct {
 	Type   EnvType
 	Domain string // empty when the environment is not routed
 	// AppName is filled when reading, for naming Docker objects.
-	AppName   string
+	AppName string
+	// TTL and ExpiresAt are set for ephemeral environments only.
+	TTL       time.Duration
+	ExpiresAt *time.Time
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+// Expired reports whether an ephemeral environment's TTL has passed at now.
+func (e Environment) Expired(now time.Time) bool {
+	return e.ExpiresAt != nil && !now.Before(*e.ExpiresAt)
 }
 
 // ValidateEnvName checks an environment name.
@@ -61,4 +72,16 @@ func ValidateDomain(domain string) error {
 		}
 	}
 	return nil
+}
+
+// Bounds for ephemeral environment lifetimes.
+const (
+	DefaultEphemeralTTL = 72 * time.Hour
+	MinEphemeralTTL     = time.Hour
+	MaxEphemeralTTL     = 30 * 24 * time.Hour
+)
+
+// EphemeralDomain is the automatic domain <env>.<app>.<baseDomain>.
+func EphemeralDomain(env, app, baseDomain string) string {
+	return env + "." + app + "." + baseDomain
 }
