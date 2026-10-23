@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -14,7 +15,7 @@ type Environments struct {
 	DB *sql.DB
 }
 
-const envSelect = `SELECT e.id, e.app_id, a.name, e.name, e.type, e.domain, e.ttl_seconds, e.expires_at, e.created_at, e.updated_at
+const envSelect = `SELECT e.id, e.app_id, a.name, e.name, e.type, e.domain, e.ttl_seconds, e.expires_at, e.resource_overrides, e.created_at, e.updated_at
 	FROM environments e JOIN apps a ON a.id = e.app_id`
 
 // ListEnvironments returns the app's environments ordered by name.
@@ -93,6 +94,22 @@ func (r Environments) DeleteEnvironment(ctx context.Context, id int64) error {
 	return execOne(ctx, r.DB, `DELETE FROM environments WHERE id = ?`, id)
 }
 
+// SetResources replaces an environment's resource overrides.
+func (r Environments) SetResources(ctx context.Context, id int64, o domain.ResourceOverrides) error {
+	data, err := json.Marshal(o)
+	if err != nil {
+		return err
+	}
+	return execOne(ctx, r.DB, `UPDATE environments SET resource_overrides = ? WHERE id = ?`, string(data), id)
+}
+
+// CountEphemeral counts an app's ephemeral environments.
+func (r Environments) CountEphemeral(ctx context.Context, appID int64) (int, error) {
+	var n int
+	err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM environments WHERE app_id = ? AND type = ?`, appID, string(domain.EnvEphemeral)).Scan(&n)
+	return n, err
+}
+
 // SetExpiry moves an environment's expiry.
 func (r Environments) SetExpiry(ctx context.Context, id int64, expires time.Time) error {
 	return execOne(ctx, r.DB, `UPDATE environments SET expires_at = ? WHERE id = ? AND expires_at IS NOT NULL`, formatTime(expires), id)
@@ -122,8 +139,9 @@ func scanEnv(row rowScanner) (domain.Environment, error) {
 		typ, created, updated string
 		ttl                   int64
 		expires               sql.NullString
+		overrides             string
 	)
-	err := row.Scan(&e.ID, &e.AppID, &e.AppName, &e.Name, &typ, &e.Domain, &ttl, &expires, &created, &updated)
+	err := row.Scan(&e.ID, &e.AppID, &e.AppName, &e.Name, &typ, &e.Domain, &ttl, &expires, &overrides, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Environment{}, domain.ErrNotFound
 	}
@@ -132,6 +150,9 @@ func scanEnv(row rowScanner) (domain.Environment, error) {
 	}
 	e.Type = domain.EnvType(typ)
 	e.TTL = time.Duration(ttl) * time.Second
+	if err := json.Unmarshal([]byte(overrides), &e.Resources); err != nil {
+		return domain.Environment{}, err
+	}
 	if e.ExpiresAt, err = parseNullTime(expires); err != nil {
 		return domain.Environment{}, err
 	}

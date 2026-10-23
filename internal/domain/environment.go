@@ -37,6 +37,8 @@ type Environment struct {
 	// TTL and ExpiresAt are set for ephemeral environments only.
 	TTL       time.Duration
 	ExpiresAt *time.Time
+	// Resources override the spec's limits in this environment.
+	Resources ResourceOverrides
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
