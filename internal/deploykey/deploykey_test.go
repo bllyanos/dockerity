@@ -42,7 +42,9 @@ func TestGenerate(t *testing.T) {
 }
 
 // memSecrets is a minimal in-memory SecretStore.
-type memSecrets struct{ versions map[secrets.Scope][]map[string]string }
+type memSecrets struct {
+	versions map[secrets.Scope][]map[string]string
+}
 
 func (m *memSecrets) Update(_ context.Context, s secrets.Scope, c secrets.Changes, _ *int64) (secrets.Version, error) {
 	cur := map[string]string{}
@@ -64,7 +66,9 @@ func (m *memSecrets) Latest(_ context.Context, s secrets.Scope) (secrets.Version
 	return secrets.Version{Scope: s, Version: len(m.versions[s])}, nil
 }
 
-func (m *memSecrets) Versions(context.Context, secrets.Scope) ([]secrets.Version, error) { return nil, nil }
+func (m *memSecrets) Versions(context.Context, secrets.Scope) ([]secrets.Version, error) {
+	return nil, nil
+}
 
 func (m *memSecrets) Values(_ context.Context, s secrets.Scope, v int) (map[string]string, error) {
 	return m.versions[s][v-1], nil
