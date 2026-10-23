@@ -23,6 +23,8 @@ type Deps struct {
 	Setup SetupService
 	// Sessions authenticates requests. When nil, every protected route returns 401.
 	Sessions SessionService
+	// Audit stores the audit log. When nil, nothing is recorded and the audit API is not registered.
+	Audit AuditLog
 	// LoginLimiter throttles failed logins. Defaults to 10 failures per 15 minutes per user and per IP.
 	LoginLimiter *ratelimit.Limiter
 }
@@ -50,16 +52,21 @@ func NewRouter(d Deps) http.Handler {
 func apiRoutes(d Deps) *routes {
 	rt := newRoutes()
 	rt.handle("/", notFound)
+	aud := auditor{logger: d.Logger}
+	if d.Audit != nil {
+		aud.rec = d.Audit
+		auditHandlers{logger: d.Logger, log: d.Audit}.register(rt)
+	}
 
 	if d.Setup != nil {
-		setupHandlers{logger: d.Logger, setup: d.Setup, sessions: d.Sessions}.register(rt)
+		setupHandlers{logger: d.Logger, setup: d.Setup, sessions: d.Sessions, audit: aud}.register(rt)
 	}
 	if d.Sessions != nil {
 		limiter := d.LoginLimiter
 		if limiter == nil {
 			limiter = ratelimit.New(10, 15*time.Minute)
 		}
-		authHandlers{logger: d.Logger, sessions: d.Sessions, limiter: limiter}.register(rt)
+		authHandlers{logger: d.Logger, sessions: d.Sessions, limiter: limiter, audit: aud}.register(rt)
 	}
 	return rt
 }

@@ -49,3 +49,30 @@ func (f *fakeSessions) Logout(_ context.Context, raw string) error {
 	delete(f.live, raw)
 	return nil
 }
+
+// fakeAudit keeps events in memory, newest last.
+type fakeAudit struct{ events []domain.AuditEvent }
+
+func (f *fakeAudit) Record(_ context.Context, e domain.AuditEvent) error {
+	e.ID = int64(len(f.events) + 1)
+	f.events = append(f.events, e)
+	return nil
+}
+
+func (f *fakeAudit) ListAudit(_ context.Context, before int64, limit int) ([]domain.AuditEvent, error) {
+	var out []domain.AuditEvent
+	for i := len(f.events) - 1; i >= 0 && len(out) < limit; i-- {
+		if before <= 0 || f.events[i].ID < before {
+			out = append(out, f.events[i])
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeAudit) actions() []string {
+	var out []string
+	for _, e := range f.events {
+		out = append(out, e.Action)
+	}
+	return out
+}

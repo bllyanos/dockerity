@@ -16,6 +16,7 @@ linters:
         - (io.Closer).Close
         - (*database/sql.DB).Close
         - (*database/sql.Tx).Rollback
+        - (*database/sql.Rows).Close
         - (*github.com/bllyanos/dockerity/internal/dockerx.Client).Close
     revive:
       rules:
