@@ -19,6 +19,7 @@ const (
 	EnvLogLevel      = "DOCKERITY_LOG_LEVEL"
 	EnvBuildWorkers  = "DOCKERITY_BUILD_WORKERS"
 	EnvTraefikDir    = "DOCKERITY_TRAEFIK_DYNAMIC_DIR"
+	EnvBackupsVolume = "DOCKERITY_BACKUPS_VOLUME"
 )
 
 // Defaults match the bootstrap compose file (docs/design.md section 13).
@@ -28,6 +29,7 @@ const (
 	DefaultMasterKeyFile = "/run/secrets/master_key"
 	DefaultLogLevel      = "info"
 	DefaultBuildWorkers  = 1
+	DefaultBackupsVolume = "dockerity-backups"
 	maxBuildWorkers      = 16
 )
 
@@ -42,6 +44,8 @@ type Config struct {
 	// TraefikDir is the directory of Traefik's file provider, shared with
 	// Traefik. It defaults to <DataDir>/traefik.
 	TraefikDir string
+	// BackupsVolume is the Docker volume that holds backup archives.
+	BackupsVolume string
 }
 
 // LookupFunc has the signature of os.LookupEnv.
@@ -65,6 +69,7 @@ func Load(lookup LookupFunc) (Config, error) {
 		BuildWorkers:  DefaultBuildWorkers,
 	}
 	cfg.TraefikDir = get(EnvTraefikDir, filepath.Join(cfg.DataDir, "traefik"))
+	cfg.BackupsVolume = get(EnvBackupsVolume, DefaultBackupsVolume)
 
 	var errs []error
 	if levelErr != nil {
