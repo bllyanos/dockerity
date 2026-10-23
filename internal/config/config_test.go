@@ -25,6 +25,7 @@ func TestLoadDefaults(t *testing.T) {
 		LogLevel:      slog.LevelInfo,
 		BuildWorkers:  DefaultBuildWorkers,
 		TraefikDir:    "/data/traefik",
+		BackupsVolume: DefaultBackupsVolume,
 	}
 	if cfg != want {
 		t.Fatalf("got %+v, want %+v", cfg, want)
