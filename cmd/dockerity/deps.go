@@ -23,6 +23,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/envsecrets"
 	"github.com/bllyanos/dockerity/internal/gitx"
 	"github.com/bllyanos/dockerity/internal/reaper"
+	"github.com/bllyanos/dockerity/internal/reconcile"
 	"github.com/bllyanos/dockerity/internal/routing"
 	"github.com/bllyanos/dockerity/internal/secrets"
 	"github.com/bllyanos/dockerity/internal/settings"
@@ -163,6 +164,7 @@ func (s *services) apiDeps() api.Deps {
 		Backups:        s.backups,
 		Settings:       s.settings,
 		EnvContainers:  &environments.Containers{Envs: s.envs, Docker: s.docker, Routes: s.routes},
+		Drift:          s.reconciler(),
 		EnvSecrets:     &envsecrets.Service{Envs: s.envs, Secrets: s.secrets},
 		ConnectionTester: &apps.ConnectionTester{
 			Apps: s.apps,
@@ -222,4 +224,23 @@ func (s *services) reaper() *reaper.Reaper {
 		Logger:  s.logger.With("component", "reaper"),
 		Now:     time.Now,
 	}
+}
+
+// reconciler reports drift between Docker and the database and repairs what is safe.
+func (s *services) reconciler() *reconcile.Reconciler {
+	return &reconcile.Reconciler{
+		Envs:        allEnvs{s.envs, sqlite.Environments{DB: s.db}},
+		Deployments: sqlite.Deployments{DB: s.db},
+		Specs:       s.specs,
+		Docker:      s.docker,
+		Routes:      s.routes,
+		Rebuilder:   s.deployRunner.Exec,
+		Logger:      s.logger.With("component", "reconcile"),
+	}
+}
+
+// allEnvs reads single environments through the service and lists all from the store.
+type allEnvs struct {
+	*environments.Service
+	sqlite.Environments
 }
