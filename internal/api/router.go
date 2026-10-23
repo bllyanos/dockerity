@@ -38,7 +38,7 @@ type Deps struct {
 	// Builds triggers and reads builds. When nil, build routes are not registered.
 	Builds BuildService
 	// BuildLogs serves persisted and live build logs.
-	BuildLogs BuildLogs
+	BuildLogs LogSource
 	// ConnectionTester tests repo access. When nil, the test-connection route is not registered.
 	ConnectionTester ConnectionTester
 	// Audit stores the audit log. When nil, nothing is recorded and the audit API is not registered.

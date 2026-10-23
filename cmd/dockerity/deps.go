@@ -91,7 +91,7 @@ func (s *services) apiDeps() api.Deps {
 			Queue:  s.buildRunner,
 			Now:    time.Now,
 		},
-		BuildLogs:    api.BuildLogs{Store: s.buildLogs, Hub: s.buildHub},
+		BuildLogs:    api.LogSource{Store: s.buildLogs, Hub: s.buildHub},
 		Environments: s.envs,
 		EnvSecrets:   &envsecrets.Service{Envs: s.envs, Secrets: s.secrets},
 		ConnectionTester: &apps.ConnectionTester{

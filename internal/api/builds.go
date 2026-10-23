@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/bllyanos/dockerity/internal/auth"
-	"github.com/bllyanos/dockerity/internal/buildlog"
 	"github.com/bllyanos/dockerity/internal/domain"
 )
 
@@ -20,16 +19,10 @@ type BuildService interface {
 	Cancel(ctx context.Context, id int64) (domain.Build, error)
 }
 
-// BuildLogs gives access to persisted and live build logs.
-type BuildLogs struct {
-	Store buildlog.Store
-	Hub   *buildlog.Hub
-}
-
 type buildHandlers struct {
 	logger *slog.Logger
 	builds BuildService
-	logs   BuildLogs
+	logs   LogSource
 	audit  auditor
 }
 
