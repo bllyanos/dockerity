@@ -5,7 +5,6 @@ package auth
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/bllyanos/dockerity/internal/auth/password"
@@ -53,7 +52,7 @@ func (s *Setup) Run(ctx context.Context, username, pw string) (domain.User, erro
 		CreatedAt:    s.Now().UTC(),
 	})
 	if errors.Is(err, domain.ErrConflict) {
-		return domain.User{}, fmt.Errorf("setup already completed: %w", err)
+		return domain.User{}, domain.Conflictf("setup already completed")
 	}
 	return u, err
 }

@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/bllyanos/dockerity/internal/auth/password"
@@ -52,7 +51,7 @@ func (s *UserAdmin) Create(ctx context.Context, username, pw string, isAdmin boo
 		Username: username, PasswordHash: hash, IsAdmin: isAdmin, CreatedAt: s.Now().UTC(),
 	})
 	if errors.Is(err, domain.ErrConflict) {
-		return domain.User{}, fmt.Errorf("username %q is taken: %w", username, err)
+		return domain.User{}, domain.Conflictf("username %q is taken", username)
 	}
 	return u, err
 }
@@ -104,7 +103,7 @@ func (s *UserAdmin) ResetPassword(ctx context.Context, id int64, pw string) (dom
 func (s *UserAdmin) get(ctx context.Context, id int64) (domain.User, error) {
 	u, err := s.Users.GetUserByID(ctx, id)
 	if errors.Is(err, domain.ErrNotFound) {
-		return domain.User{}, fmt.Errorf("user %d not found: %w", id, err)
+		return domain.User{}, domain.NotFoundf("user %d not found", id)
 	}
 	return u, err
 }

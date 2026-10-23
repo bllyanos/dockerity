@@ -92,7 +92,7 @@ func (b *Builtin) Update(ctx context.Context, scope Scope, changes Changes, acto
 	}
 	err = b.Store.InsertSecretVersion(ctx, EncryptedVersion{Version: v, Sealed: sealed})
 	if errors.Is(err, domain.ErrConflict) {
-		return Version{}, fmt.Errorf("secrets were changed concurrently, retry: %w", err)
+		return Version{}, domain.Conflictf("secrets were changed concurrently, retry")
 	}
 	return v, err
 }

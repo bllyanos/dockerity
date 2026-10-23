@@ -24,3 +24,14 @@ func TestUsername(t *testing.T) {
 		t.Errorf("NormalizeUsername = %q", got)
 	}
 }
+
+func TestSentinelErrors(t *testing.T) {
+	nf := NotFoundf("app %d not found", 3)
+	if !errors.Is(nf, ErrNotFound) || nf.Error() != "app 3 not found" {
+		t.Fatalf("NotFoundf: %v", nf)
+	}
+	c := Conflictf("name %q taken", "x")
+	if !errors.Is(c, ErrConflict) || errors.Is(c, ErrNotFound) || c.Error() != `name "x" taken` {
+		t.Fatalf("Conflictf: %v", c)
+	}
+}

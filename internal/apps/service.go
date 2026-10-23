@@ -4,7 +4,6 @@ package apps
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -51,7 +50,7 @@ func (s *Service) List(ctx context.Context) ([]domain.App, error) {
 func (s *Service) Get(ctx context.Context, id int64) (domain.App, error) {
 	a, err := s.Store.GetApp(ctx, id)
 	if errors.Is(err, domain.ErrNotFound) {
-		return domain.App{}, fmt.Errorf("app %d not found: %w", id, err)
+		return domain.App{}, domain.NotFoundf("app %d not found", id)
 	}
 	return a, err
 }
@@ -73,7 +72,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (domain.App, error
 	a.CreatedAt, a.UpdatedAt = now, now
 	created, err := s.Store.CreateApp(ctx, a)
 	if errors.Is(err, domain.ErrConflict) {
-		return domain.App{}, fmt.Errorf("an app named %q already exists: %w", a.Name, err)
+		return domain.App{}, domain.Conflictf("an app named %q already exists", a.Name)
 	}
 	return created, err
 }
