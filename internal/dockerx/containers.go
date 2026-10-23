@@ -29,6 +29,7 @@ type ContainerInfo struct {
 	ID       string
 	Name     string
 	Image    string
+	ImageID  string
 	Labels   map[string]string
 	Running  bool
 	ExitCode int
@@ -282,7 +283,7 @@ func (c *Client) ListManaged(ctx context.Context, labels map[string]string) ([]C
 		if len(s.Names) > 0 {
 			name = strings.TrimPrefix(s.Names[0], "/")
 		}
-		out = append(out, ContainerInfo{ID: s.ID, Name: name, Image: s.Image, Labels: s.Labels, Running: s.State == container.StateRunning})
+		out = append(out, ContainerInfo{ID: s.ID, Name: name, Image: s.Image, ImageID: s.ImageID, Labels: s.Labels, Running: s.State == container.StateRunning})
 	}
 	return out, nil
 }

@@ -41,8 +41,12 @@ type Executor struct {
 	// Backups archives stateful volumes before an image change. Required for
 	// deploying stateful services whose image changes.
 	Backups Backups
-	Logger  *slog.Logger
-	Now     func() time.Time
+	// ImageGC, when set, removes images no longer needed after a deployment succeeds.
+	ImageGC interface {
+		Collect(ctx context.Context) error
+	}
+	Logger *slog.Logger
+	Now    func() time.Time
 	// Sleep waits for d or until ctx is done; nil uses a real timer.
 	Sleep func(ctx context.Context, d time.Duration) error
 }
@@ -101,6 +105,12 @@ func (e *Executor) Run(ctx context.Context, id int64) {
 	_, _ = fmt.Fprintln(sink, "\nDeployment succeeded.")
 	if err := e.Store.FinishDeployment(context.Background(), id, domain.DeploymentSucceeded, "", e.Now().UTC()); err != nil {
 		e.Logger.Error("finish deployment", "deployment", id, "error", err)
+		return
+	}
+	if e.ImageGC != nil {
+		if err := e.ImageGC.Collect(ctx); err != nil {
+			e.Logger.Error("image garbage collection", "deployment", id, "error", err)
+		}
 	}
 }
 
