@@ -20,9 +20,15 @@ type AppService interface {
 	RegenerateDeployKey(ctx context.Context, id int64) (domain.App, error)
 }
 
+// ConnectionTester checks repo access with an app's deploy key.
+type ConnectionTester interface {
+	Test(ctx context.Context, appID int64) (apps.ConnectionResult, error)
+}
+
 type appHandlers struct {
 	logger *slog.Logger
 	apps   AppService
+	tester ConnectionTester
 	audit  auditor
 }
 
@@ -33,6 +39,9 @@ func (h appHandlers) register(rt *routes) {
 	rt.handle("PATCH /apps/{id}", h.update)
 	rt.handle("DELETE /apps/{id}", h.delete)
 	rt.handle("POST /apps/{id}/deploy-key/regenerate", h.regenerateKey)
+	if h.tester != nil {
+		rt.handle("POST /apps/{id}/test-connection", h.testConnection)
+	}
 }
 
 type appView struct {
@@ -151,4 +160,24 @@ func (h appHandlers) regenerateKey(w http.ResponseWriter, r *http.Request) {
 	}
 	h.audit.record(r, appEvent(domain.AuditAppDeployKeyRegenerated, a))
 	writeJSON(w, http.StatusOK, map[string]appView{"app": toAppView(a)})
+}
+
+type connectionView struct {
+	OK                  bool   `json:"ok"`
+	DefaultBranchExists bool   `json:"defaultBranchExists"`
+	BranchCount         int    `json:"branchCount"`
+	Message             string `json:"message"`
+}
+
+func (h appHandlers) testConnection(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	res, err := h.tester.Test(r.Context(), id)
+	if err != nil {
+		writeServiceError(w, r, h.logger, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]connectionView{"result": connectionView(res)})
 }
