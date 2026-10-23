@@ -12,6 +12,7 @@ import { EnvironmentPage } from './pages/environments/EnvironmentPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { SetupPage } from './pages/SetupPage'
+import { SettingsPage } from './pages/settings/SettingsPage'
 import { TokensPage } from './pages/TokensPage'
 import { UsersPage } from './pages/UsersPage'
 
@@ -38,6 +39,7 @@ function Gate() {
             <Route path="tokens" element={<TokensPage />} />
             {state.user.isAdmin && <Route path="users" element={<UsersPage />} />}
             {state.user.isAdmin && <Route path="audit" element={<AuditPage />} />}
+            {state.user.isAdmin && <Route path="settings" element={<SettingsPage />} />}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

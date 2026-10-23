@@ -10,6 +10,7 @@ const navItems: NavItem[] = [
   { label: 'API tokens', to: '/tokens' },
   { label: 'Users', to: '/users', adminOnly: true },
   { label: 'Audit', to: '/audit', adminOnly: true },
+  { label: 'Settings', to: '/settings', adminOnly: true },
 ]
 
 export function Layout() {
