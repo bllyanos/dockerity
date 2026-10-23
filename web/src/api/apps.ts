@@ -6,6 +6,7 @@ export type App = {
   repoUrl: string
   defaultBranch: string
   deployPublicKey: string
+  maxEphemeral: number
   createdAt: string
   updatedAt: string
 }
@@ -29,7 +30,7 @@ export async function createApp(input: { name: string; repoUrl: string; defaultB
   return (await api<{ app: App }>('/apps', { method: 'POST', body: input })).app
 }
 
-export async function updateApp(id: number, input: { repoUrl?: string; defaultBranch?: string }): Promise<App> {
+export async function updateApp(id: number, input: { repoUrl?: string; defaultBranch?: string; maxEphemeral?: number }): Promise<App> {
   return (await api<{ app: App }>(`/apps/${id}`, { method: 'PATCH', body: input })).app
 }
 
