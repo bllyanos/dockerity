@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -96,5 +97,13 @@ func TestBuildImageWithDocker(t *testing.T) {
 	second, logs := build()
 	if second != first || !strings.Contains(logs, "CACHED") {
 		t.Fatalf("rebuild should hit the cache (ids %s vs %s):\n%s", first, second, logs)
+	}
+
+	images, err := c.ListImages(ctx, map[string]string{"dockerity.test": "true"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(images, func(img ImageInfo) bool { return img.ID == first && slices.Contains(img.Tags, tag) }) {
+		t.Fatalf("built image %s %s not listed: %+v", first, tag, images)
 	}
 }
