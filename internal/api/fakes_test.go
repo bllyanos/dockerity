@@ -464,3 +464,20 @@ func (f *fakeEnvs) SetResources(ctx context.Context, id int64, o domain.Resource
 	e.Resources = o
 	return e, nil
 }
+
+func (f *fakeDeployments) Rollback(_ context.Context, id int64, _ *int64) (domain.Deployment, error) {
+	if id < 1 || int(id) > len(f.deps) {
+		return domain.Deployment{}, domain.ErrNotFound
+	}
+	t := f.deps[id-1]
+	d := domain.Deployment{ID: int64(len(f.deps) + 1), EnvID: t.EnvID, BuildID: t.BuildID, SpecVersion: t.SpecVersion, Status: domain.DeploymentPending}
+	f.deps = append(f.deps, d)
+	return d, nil
+}
+
+func (f *fakeDeployments) PreviewRollback(_ context.Context, id int64) (warning.Warning, error) {
+	if id < 1 || int(id) > len(f.deps) {
+		return warning.Warning{}, domain.ErrNotFound
+	}
+	return warning.Warning{}, nil
+}

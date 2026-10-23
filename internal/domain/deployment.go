@@ -5,8 +5,11 @@ import (
 	"time"
 )
 
-// AuditDeploymentStarted records a deployment request.
-const AuditDeploymentStarted = "deployment.started"
+// Audit actions for deployments.
+const (
+	AuditDeploymentStarted  = "deployment.started"
+	AuditDeploymentRollback = "deployment.rollback"
+)
 
 // DeploymentStatus is the lifecycle state of a deployment.
 type DeploymentStatus string

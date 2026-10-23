@@ -18,6 +18,8 @@ type DeploymentService interface {
 	List(ctx context.Context, envID int64) ([]domain.Deployment, error)
 	Get(ctx context.Context, id int64) (domain.Deployment, []domain.DeploymentStep, error)
 	Preview(ctx context.Context, envID, buildID int64) (warning.Warning, error)
+	Rollback(ctx context.Context, deploymentID int64, actor *int64) (domain.Deployment, error)
+	PreviewRollback(ctx context.Context, deploymentID int64) (warning.Warning, error)
 }
 
 type deploymentHandlers struct {
@@ -33,6 +35,8 @@ func (h deploymentHandlers) register(rt *routes) {
 	rt.handle("GET /environments/{id}/deployments", h.list)
 	rt.handle("GET /deployments/{id}", h.get)
 	rt.handle("GET /deployments/{id}/logs", h.streamLogs)
+	rt.handle("POST /deployments/{id}/rollback", h.rollback)
+	rt.handle("POST /deployments/{id}/rollback/preview", h.previewRollback)
 }
 
 type deploymentView struct {
@@ -179,6 +183,10 @@ func (h deploymentHandlers) preview(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, r, h.logger, err)
 		return
 	}
+	writeJSON(w, http.StatusOK, map[string]warningView{"warning": toWarningView(wn)})
+}
+
+func toWarningView(wn warning.Warning) warningView {
 	view := warningView{Downtime: wn.Downtime, Services: make([]warningServiceView, 0, len(wn.Services))}
 	for _, s := range wn.Services {
 		deps := s.Dependents
@@ -190,5 +198,38 @@ func (h deploymentHandlers) preview(w http.ResponseWriter, r *http.Request) {
 			ImageChanged: s.ImageChanged, MajorChange: s.MajorChange, Backup: s.Backup, LastBackup: s.LastBackup, Dependents: deps,
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]warningView{"warning": view})
+	return view
+}
+
+func (h deploymentHandlers) rollback(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	p, _ := auth.PrincipalFrom(r.Context())
+	actor := p.User.ID
+	d, err := h.deployments.Rollback(r.Context(), id, &actor)
+	if err != nil {
+		writeServiceError(w, r, h.logger, err)
+		return
+	}
+	h.audit.record(r, domain.AuditEvent{
+		Action: domain.AuditDeploymentRollback, TargetType: "deployment", TargetID: strconv.FormatInt(d.ID, 10),
+		Metadata: map[string]string{"to_deployment": strconv.FormatInt(id, 10), "build_id": strconv.FormatInt(d.BuildID, 10),
+			"spec_version": strconv.Itoa(d.SpecVersion), "secret_version": strconv.Itoa(d.SecretVersion)},
+	})
+	writeJSON(w, http.StatusAccepted, map[string]deploymentView{"deployment": toDeploymentView(d)})
+}
+
+func (h deploymentHandlers) previewRollback(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	wn, err := h.deployments.PreviewRollback(r.Context(), id)
+	if err != nil {
+		writeServiceError(w, r, h.logger, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]warningView{"warning": toWarningView(wn)})
 }
