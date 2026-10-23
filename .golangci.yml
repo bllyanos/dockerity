@@ -14,6 +14,7 @@ linters:
       # Close/Rollback errors on cleanup paths carry no useful signal.
       exclude-functions:
         - (io.Closer).Close
+        - (*os.File).Close
         - (*database/sql.DB).Close
         - (*database/sql.Tx).Rollback
         - (*database/sql.Rows).Close
