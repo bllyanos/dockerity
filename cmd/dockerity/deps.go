@@ -15,6 +15,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/config"
 	"github.com/bllyanos/dockerity/internal/deploykey"
 	"github.com/bllyanos/dockerity/internal/dockerx"
+	"github.com/bllyanos/dockerity/internal/environments"
 	"github.com/bllyanos/dockerity/internal/gitx"
 	"github.com/bllyanos/dockerity/internal/secrets"
 	"github.com/bllyanos/dockerity/internal/store/sqlite"
@@ -87,6 +88,11 @@ func (s *services) apiDeps() api.Deps {
 			Now:    time.Now,
 		},
 		BuildLogs: api.BuildLogs{Store: s.buildLogs, Hub: s.buildHub},
+		Environments: &environments.Service{
+			Store: sqlite.Environments{DB: db},
+			Apps:  s.apps,
+			Now:   time.Now,
+		},
 		ConnectionTester: &apps.ConnectionTester{
 			Apps: s.apps,
 			Keys: s.deployKeys,
