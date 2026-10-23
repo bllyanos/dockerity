@@ -76,3 +76,58 @@ func (f *fakeAudit) actions() []string {
 	}
 	return out
 }
+
+// fakeTokens issues "dkta_<n>" tokens for any user.
+type fakeTokens struct {
+	tokens []domain.APIToken
+	raw    map[string]int64
+	users  map[int64]domain.User
+	used   map[int64]bool
+}
+
+func newFakeTokens() *fakeTokens {
+	return &fakeTokens{raw: map[string]int64{}, users: map[int64]domain.User{}, used: map[int64]bool{}}
+}
+
+func (f *fakeTokens) Create(_ context.Context, u domain.User, name string) (string, domain.APIToken, error) {
+	if name == "" {
+		return "", domain.APIToken{}, domain.Invalid("name", "required")
+	}
+	t := domain.APIToken{ID: int64(len(f.tokens) + 1), UserID: u.ID, Name: name, TokenDigest: "digest"}
+	f.tokens = append(f.tokens, t)
+	raw := "dkta_" + string(rune('a'+t.ID))
+	f.raw[raw] = t.ID
+	f.users[u.ID] = u
+	return raw, t, nil
+}
+
+func (f *fakeTokens) List(_ context.Context, userID int64) ([]domain.APIToken, error) {
+	var out []domain.APIToken
+	for _, t := range f.tokens {
+		if t.UserID == userID {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeTokens) Revoke(_ context.Context, userID, id int64) (domain.APIToken, error) {
+	for i, t := range f.tokens {
+		if t.ID == id && t.UserID == userID && !t.Revoked() {
+			now := time.Now()
+			f.tokens[i].RevokedAt = &now
+			return f.tokens[i], nil
+		}
+	}
+	return domain.APIToken{}, domain.ErrNotFound
+}
+
+func (f *fakeTokens) Authenticate(_ context.Context, raw string) (auth.Principal, bool, error) {
+	id, ok := f.raw[raw]
+	if !ok || f.tokens[id-1].Revoked() {
+		return auth.Principal{}, false, domain.ErrUnauthorized
+	}
+	first := !f.used[id]
+	f.used[id] = true
+	return auth.Principal{User: f.users[f.tokens[id-1].UserID], APITokenID: id}, first, nil
+}
