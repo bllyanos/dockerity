@@ -92,3 +92,69 @@ func TestRoutedContainers(t *testing.T) {
 		t.Fatalf("routed %v %v", got, err)
 	}
 }
+
+func TestConfigWithTLS(t *testing.T) {
+	routes := func(host string) Env {
+		return Env{App: "shop", Env: "pr-1", Domain: host, Services: []Service{{Name: "web", Port: 80, Containers: []string{"c1"}}}}
+	}
+	resolver := Options{TLS: &TLS{CertResolver: "le", WildcardDomain: "apps.test"}}
+
+	data, err := Config(routes("pr-1-shop.apps.test"), resolver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := parse(t, data)
+	secure, plain := cfg.HTTP.Routers["dkt-shop-pr-1-web"], cfg.HTTP.Routers["dkt-shop-pr-1-web-http"]
+	if strings.Join(secure.EntryPoints, ",") != "websecure" || secure.TLS == nil || secure.TLS.CertResolver != "le" ||
+		len(secure.TLS.Domains) != 1 || secure.TLS.Domains[0].Main != "*.apps.test" {
+		t.Fatalf("secure router %+v", secure)
+	}
+	if strings.Join(plain.EntryPoints, ",") != "web" || len(plain.Middlewares) != 1 {
+		t.Fatalf("redirect router %+v", plain)
+	}
+	if mw := cfg.HTTP.Middlewares[plain.Middlewares[0]]; mw.RedirectScheme == nil || mw.RedirectScheme.Scheme != "https" {
+		t.Fatalf("middleware %+v", cfg.HTTP.Middlewares)
+	}
+
+	// A permanent domain outside the base domain gets its own certificate from the resolver.
+	cfg = parse(t, must(Config(routes("shop.example.com"), resolver)))
+	if r := cfg.HTTP.Routers["dkt-shop-pr-1-web"]; r.TLS == nil || len(r.TLS.Domains) != 0 || r.TLS.CertResolver != "le" {
+		t.Fatalf("custom domain %+v", r)
+	}
+
+	// Certificate mode: TLS on, Traefik's default (wildcard) certificate.
+	cfg = parse(t, must(Config(routes("pr-1-shop.apps.test"), Options{TLS: &TLS{WildcardDomain: "apps.test"}})))
+	if r := cfg.HTTP.Routers["dkt-shop-pr-1-web"]; r.TLS == nil || r.TLS.CertResolver != "" || len(r.TLS.Domains) != 0 {
+		t.Fatalf("certificate mode %+v", r)
+	}
+}
+
+func must(data []byte, err error) []byte {
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+func TestCertificateConfig(t *testing.T) {
+	f := Files{Dir: t.TempDir()}
+	data, err := CertificateConfig("/certs/wild.crt", "/certs/wild.key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "certFile: /certs/wild.crt") || !strings.Contains(string(data), "defaultCertificate") {
+		t.Fatalf("tls config:\n%s", data)
+	}
+	if err := f.WriteTLS(data); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(f.Dir, "dkt-tls.yml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.RemoveTLS(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.RemoveTLS(); err != nil {
+		t.Fatal(err)
+	}
+}

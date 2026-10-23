@@ -60,3 +60,29 @@ func TestValidate(t *testing.T) {
 		}
 	}
 }
+
+func TestRouteOptions(t *testing.T) {
+	if o := (Settings{TLSMode: TLSNone}).RouteOptions(); o.TLS != nil || len(o.Entrypoints) != 1 {
+		t.Fatalf("none %+v", o)
+	}
+	if o := (Settings{TLSMode: TLSResolver, CertResolver: "le", BaseDomain: "apps.test"}).RouteOptions(); o.TLS == nil || o.TLS.CertResolver != "le" || o.TLS.WildcardDomain != "apps.test" {
+		t.Fatalf("resolver %+v", o)
+	}
+	if o := (Settings{TLSMode: TLSCertificate, BaseDomain: "apps.test"}).RouteOptions(); o.TLS == nil || o.TLS.CertResolver != "" {
+		t.Fatalf("certificate %+v", o)
+	}
+}
+
+func TestOnChangeRunsAfterSave(t *testing.T) {
+	var applied Settings
+	s := &Service{Store: memStore{}, Now: time.Now, OnChange: func(_ context.Context, x Settings) error {
+		applied = x
+		return nil
+	}}
+	if _, err := s.Update(context.Background(), Settings{BaseDomain: "apps.test", TLSMode: TLSNone}); err != nil {
+		t.Fatal(err)
+	}
+	if applied.BaseDomain != "apps.test" {
+		t.Fatalf("applied %+v", applied)
+	}
+}

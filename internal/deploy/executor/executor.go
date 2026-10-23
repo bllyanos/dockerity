@@ -29,6 +29,11 @@ type Executor struct {
 	Logs    buildlog.Store
 	Hub     *buildlog.Hub
 	Routing routing.Options
+	// RouteOptions, when set, supplies routing options (TLS) at write time
+	// and takes precedence over Routing.
+	RouteOptions interface {
+		RouteOptions(ctx context.Context) (routing.Options, error)
+	}
 	// Routes, when set, receives each environment's Traefik routes.
 	Routes RouteFiles
 	// AllEnvs, when set, lets RebuildAllRoutes find every environment.

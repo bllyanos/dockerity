@@ -47,7 +47,13 @@ func (e *Executor) syncRoutes(ctx context.Context, env domain.Environment, s spe
 			Name: svc.Name, Path: svc.HTTP.RoutePath(), Port: svc.HTTP.Port, Containers: byService[svc.Name],
 		})
 	}
-	data, err := routing.Config(routes, e.Routing)
+	opts := e.Routing
+	if e.RouteOptions != nil {
+		if opts, err = e.RouteOptions.RouteOptions(ctx); err != nil {
+			return err
+		}
+	}
+	data, err := routing.Config(routes, opts)
 	if err != nil {
 		return err
 	}

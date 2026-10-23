@@ -91,7 +91,7 @@ func (s *Service) CreatePermanent(ctx context.Context, appID int64, name, host s
 	return e, err
 }
 
-// CreateEphemeral adds an ephemeral environment named <name>.<app>.<baseDomain>
+// CreateEphemeral adds an ephemeral environment at <name>-<app>.<baseDomain>
 // that expires after ttl (DefaultEphemeralTTL when zero).
 func (s *Service) CreateEphemeral(ctx context.Context, appID int64, name string, ttl time.Duration) (domain.Environment, error) {
 	app, err := s.Apps.Get(ctx, appID)
@@ -115,7 +115,10 @@ func (s *Service) CreateEphemeral(ctx context.Context, appID int64, name string,
 	if cfg.BaseDomain == "" {
 		return domain.Environment{}, domain.Invalid("baseDomain", "set a base domain in the settings before spawning ephemeral environments")
 	}
-	host := domain.EphemeralDomain(name, app.Name, cfg.BaseDomain)
+	host, err := domain.EphemeralDomain(name, app.Name, cfg.BaseDomain)
+	if err != nil {
+		return domain.Environment{}, err
+	}
 	if err := domain.ValidateDomain(host); err != nil {
 		return domain.Environment{}, err
 	}

@@ -34,6 +34,18 @@ This starts Traefik (ports 80/443) and Dockerity behind it. `DOCKERITY_HTTP_PORT
 Back up `master_key` outside the VM (for example in your password manager). Losing it
 means losing every secret stored in Dockerity.
 
+### HTTPS and ephemeral environments
+
+Point a wildcard DNS record `*.apps.example.com` at the VM, then set the base domain
+`apps.example.com` and a TLS mode in Dockerity's settings:
+
+- **certificate**: copy a wildcard certificate for `*.apps.example.com` into
+  `deploy/certs/` and use the paths `/certs/<file>`;
+- **resolver**: enable a Traefik certificate resolver in `deploy/docker-compose.yml`
+  (a Let's Encrypt DNS challenge example is in the file) and enter its name.
+
+Ephemeral environments get `https://<env>-<app>.apps.example.com`.
+
 ### Rotating the master key
 
 With Dockerity stopped:

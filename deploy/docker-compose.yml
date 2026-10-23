@@ -17,6 +17,14 @@ services:
       # App routes: Dockerity writes one file per environment here.
       - --providers.file.directory=/traefik
       - --providers.file.watch=true
+      # HTTPS for app domains is set in Dockerity's settings (TLS mode).
+      # Certificate mode: put the wildcard certificate in ./certs and set the
+      # paths /certs/<file> in the settings.
+      # Resolver mode: define a resolver here and set its name in the settings,
+      # for example Let's Encrypt with a DNS challenge:
+      # - --certificatesresolvers.le.acme.dnschallenge.provider=cloudflare
+      # - --certificatesresolvers.le.acme.email=ops@example.com
+      # - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
     ports:
@@ -25,6 +33,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - dockerity-traefik:/traefik:ro
+      - ./certs:/certs:ro
     networks:
       - edge
     labels:
