@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { deleteApp, getApp, type App } from '../../api/apps'
 import { PageHeader } from '../../components/PageHeader'
 import { Button } from '../../components/form/Button'
@@ -35,7 +35,15 @@ export function AppDetailPage() {
 
   return (
     <>
-      <PageHeader title={app.name} actions={<Button variant="danger" onClick={() => void remove()}>Delete app</Button>} />
+      <PageHeader
+        title={app.name}
+        actions={
+          <div className="flex items-center gap-3">
+            <Link to={`/apps/${app.id}/spec`} className="text-sm font-medium text-slate-700 hover:underline">Edit spec</Link>
+            <Button variant="danger" onClick={() => void remove()}>Delete app</Button>
+          </div>
+        }
+      />
       <ErrorMessage error={error} />
       <div className="space-y-6">
         <DeployKeyPanel app={app} onChanged={setApp} />
