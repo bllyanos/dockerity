@@ -52,6 +52,10 @@ func run(ctx context.Context) error {
 	}
 	defer db.Close()
 
+	if _, err := openKeyring(ctx, logger, cfg.MasterKeyFile, db); err != nil {
+		return err
+	}
+
 	docker, err := connectDocker(ctx, logger)
 	if err != nil {
 		return err
