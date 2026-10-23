@@ -25,6 +25,14 @@ type Service struct {
 	Apps  interface {
 		Get(ctx context.Context, id int64) (domain.App, error)
 	}
+	// Deployments, when set, blocks deleting an environment while it deploys.
+	Deployments interface {
+		ListDeployments(ctx context.Context, envID int64, limit int) ([]domain.Deployment, error)
+	}
+	// Runtime, when set, removes the environment's containers and network on delete.
+	Runtime interface {
+		Remove(ctx context.Context, app, env string) error
+	}
 	Now func() time.Time
 }
 
@@ -87,11 +95,26 @@ func (s *Service) UpdateDomain(ctx context.Context, id int64, host string) (doma
 	return e, nil
 }
 
-// Delete removes an environment record.
+// Delete stops the environment's containers, removes its network and deletes
+// the record. It is refused while a deployment is in progress.
 func (s *Service) Delete(ctx context.Context, id int64) (domain.Environment, error) {
 	e, err := s.Get(ctx, id)
 	if err != nil {
 		return domain.Environment{}, err
+	}
+	if s.Deployments != nil {
+		latest, err := s.Deployments.ListDeployments(ctx, id, 1)
+		if err != nil {
+			return domain.Environment{}, err
+		}
+		if len(latest) > 0 && !latest[0].Status.Terminal() {
+			return domain.Environment{}, domain.Conflictf("a deployment is in progress in %s; wait for it to finish", e.Name)
+		}
+	}
+	if s.Runtime != nil {
+		if err := s.Runtime.Remove(ctx, e.AppName, e.Name); err != nil {
+			return domain.Environment{}, err
+		}
 	}
 	return e, s.Store.DeleteEnvironment(ctx, id)
 }

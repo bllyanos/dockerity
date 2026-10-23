@@ -90,3 +90,36 @@ func TestEnvironments(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+type deploymentsFake struct{ status domain.DeploymentStatus }
+
+func (d deploymentsFake) ListDeployments(context.Context, int64, int) ([]domain.Deployment, error) {
+	if d.status == "" {
+		return nil, nil
+	}
+	return []domain.Deployment{{Status: d.status}}, nil
+}
+
+type runtimeFake struct{ removed []string }
+
+func (r *runtimeFake) Remove(_ context.Context, app, env string) error {
+	r.removed = append(r.removed, app+"/"+env)
+	return nil
+}
+
+func TestDeleteGuardsAndTearsDown(t *testing.T) {
+	rt := &runtimeFake{}
+	s := &Service{Store: &memStore{}, Apps: oneApp{}, Now: time.Now, Runtime: rt, Deployments: deploymentsFake{status: domain.DeploymentRunning}}
+	ctx := context.Background()
+	e, _ := s.CreatePermanent(ctx, 1, "staging", "")
+	e.AppName = "shop"
+	s.Store.(*memStore).envs[0].AppName = "shop"
+
+	if _, err := s.Delete(ctx, e.ID); !errors.Is(err, domain.ErrConflict) || len(rt.removed) != 0 {
+		t.Fatalf("delete during deployment: %v %v", err, rt.removed)
+	}
+	s.Deployments = deploymentsFake{status: domain.DeploymentSucceeded}
+	if _, err := s.Delete(ctx, e.ID); err != nil || len(rt.removed) != 1 || rt.removed[0] != "shop/staging" {
+		t.Fatalf("delete: %v %v", err, rt.removed)
+	}
+}
