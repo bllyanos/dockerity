@@ -110,3 +110,23 @@ func Config(e Env, opts Options) ([]byte, error) {
 	}
 	return yaml.Marshal(cfg)
 }
+
+// RoutedContainers parses a dynamic config written by Config and returns the
+// container names that receive traffic.
+func RoutedContainers(data []byte) (map[string]bool, error) {
+	var cfg dynamicConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, svc := range cfg.HTTP.Services {
+		for _, s := range svc.LoadBalancer.Servers {
+			host := strings.TrimPrefix(s.URL, "http://")
+			if i := strings.LastIndexByte(host, ':'); i >= 0 {
+				host = host[:i]
+			}
+			out[host] = true
+		}
+	}
+	return out, nil
+}

@@ -77,3 +77,18 @@ func TestFiles(t *testing.T) {
 		t.Fatalf("removing a missing file: %v", err)
 	}
 }
+
+func TestRoutedContainers(t *testing.T) {
+	f := Files{Dir: t.TempDir()}
+	if got, err := f.Routed("shop", "prod"); err != nil || len(got) != 0 {
+		t.Fatalf("missing file: %v %v", got, err)
+	}
+	data, _ := Config(Env{App: "shop", Env: "prod", Domain: "shop.test", Services: []Service{
+		{Name: "web", Port: 80, Containers: []string{"dkt-shop-prod-web-d1", "dkt-shop-prod-web-d2"}},
+	}}, DefaultOptions)
+	_ = f.Write("shop", "prod", data)
+	got, err := f.Routed("shop", "prod")
+	if err != nil || !got["dkt-shop-prod-web-d1"] || !got["dkt-shop-prod-web-d2"] || len(got) != 2 {
+		t.Fatalf("routed %v %v", got, err)
+	}
+}
