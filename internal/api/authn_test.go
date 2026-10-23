@@ -14,7 +14,7 @@ import (
 
 func fullDeps() Deps {
 	return Deps{Logger: discardLogger, Setup: &fakeSetup{}, Sessions: newFakeSessions(), Tokens: newFakeTokens(), Audit: &fakeAudit{},
-		Users: &fakeUserAdmin{users: []domain.User{alice}}, Apps: &fakeApps{}, ConnectionTester: fakeTester{},
+		Users: &fakeUserAdmin{users: []domain.User{alice}}, Apps: &fakeApps{}, ConnectionTester: fakeTester{}, Builds: &fakeBuilds{},
 		Specs: &apps.Specs{Apps: &fakeApps{}, Store: &memSpecStore{}, Now: time.Now}}
 }
 

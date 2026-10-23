@@ -230,3 +230,44 @@ func (fakeTester) Test(_ context.Context, id int64) (apps.ConnectionResult, erro
 	}
 	return apps.ConnectionResult{OK: true, DefaultBranchExists: true, BranchCount: 3, Message: "connected"}, nil
 }
+
+// fakeBuilds serves fixed builds: 1 is running, 2 has succeeded.
+type fakeBuilds struct {
+	triggered []string
+	canceled  []int64
+}
+
+func (f *fakeBuilds) Trigger(_ context.Context, appID int64, ref string, _ *int64) (domain.Build, error) {
+	if ref == "" {
+		ref = "main"
+	}
+	f.triggered = append(f.triggered, ref)
+	return domain.Build{ID: 3, AppID: appID, Ref: ref, Status: domain.BuildQueued}, nil
+}
+
+func (f *fakeBuilds) List(context.Context, int64) ([]domain.Build, error) {
+	return []domain.Build{{ID: 2, Status: domain.BuildSucceeded}, {ID: 1, Status: domain.BuildRunning}}, nil
+}
+
+func (f *fakeBuilds) Get(_ context.Context, id int64) (domain.Build, []domain.BuildImage, error) {
+	switch id {
+	case 1:
+		return domain.Build{ID: 1, Status: domain.BuildRunning}, nil, nil
+	case 2:
+		return domain.Build{ID: 2, Status: domain.BuildSucceeded, CommitSHA: "abc"},
+			[]domain.BuildImage{{BuildID: 2, Service: "api", ImageTag: "dkt/shop/api:abc", ImageID: "sha256:1"}}, nil
+	}
+	return domain.Build{}, nil, domain.ErrNotFound
+}
+
+func (f *fakeBuilds) Cancel(ctx context.Context, id int64) (domain.Build, error) {
+	b, _, err := f.Get(ctx, id)
+	if err != nil {
+		return b, err
+	}
+	if b.Status.Terminal() {
+		return b, domain.Conflictf("already finished")
+	}
+	f.canceled = append(f.canceled, id)
+	return b, nil
+}

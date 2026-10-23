@@ -29,3 +29,6 @@ func logRequests(logger *slog.Logger, next http.Handler) http.Handler {
 		)
 	})
 }
+
+// Unwrap lets http.ResponseController reach the underlying writer (Flush for SSE).
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
