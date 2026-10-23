@@ -114,6 +114,31 @@ func (s *Service) Archive(ctx context.Context, env domain.Environment, svc spec.
 	return out, nil
 }
 
+// ArchiveEnvironment backs up the volumes of every stateful service of the
+// environment's current deployment, for example before deleting it. Its
+// containers must already be stopped. Nothing deployed means nothing to save.
+func (s *Service) ArchiveEnvironment(ctx context.Context, env domain.Environment) ([]domain.Backup, error) {
+	sp, err := s.Specs.CurrentSpec(ctx, env)
+	if errors.Is(err, domain.ErrConflict) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []domain.Backup
+	for _, svc := range sp.Services {
+		if svc.Kind != spec.KindStateful || len(svc.Volumes) == 0 {
+			continue
+		}
+		list, err := s.Archive(ctx, env, svc, domain.BackupEnvDelete)
+		out = append(out, list...)
+		if err != nil {
+			return out, err
+		}
+	}
+	return out, nil
+}
+
 // Restore replaces a volume's content with a backup, stopping the service's
 // containers while it runs. The service is down meanwhile.
 func (s *Service) Restore(ctx context.Context, backupID int64) (domain.Backup, error) {

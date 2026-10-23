@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
-import { deleteEnvironment, getEnvironment, updateEnvironmentDomain } from '../../api/environments'
+import { Link, useParams } from 'react-router'
+import { getEnvironment, updateEnvironmentDomain } from '../../api/environments'
 import { PageHeader } from '../../components/PageHeader'
 import { Button } from '../../components/form/Button'
 import { ErrorMessage } from '../../components/form/ErrorMessage'
@@ -9,11 +9,11 @@ import { useSubmit } from '../../components/form/useSubmit'
 import { useLoad } from '../../lib/useLoad'
 import { DeploymentsPanel } from '../deployments/DeploymentsPanel'
 import { ContainersPanel } from './ContainersPanel'
+import { DeleteEnvironmentDialog } from './DeleteEnvironmentDialog'
 import { SecretsPanel } from './SecretsPanel'
 
 export function EnvironmentPage() {
   const id = Number(useParams().id)
-  const navigate = useNavigate()
   const load = useCallback(() => getEnvironment(id), [id])
   const { data: env, error, reload } = useLoad(load)
   const [domain, setDomain] = useState<string | null>(null)
@@ -23,11 +23,7 @@ export function EnvironmentPage() {
     reload()
   })
 
-  async function remove() {
-    if (!env || !window.confirm(`Delete environment ${env.name}?`)) return
-    await deleteEnvironment(env.id)
-    navigate(`/apps/${env.appId}`)
-  }
+  const [deleting, setDeleting] = useState(false)
 
   if (!env) return <ErrorMessage error={error} />
 
@@ -38,10 +34,11 @@ export function EnvironmentPage() {
         actions={
           <div className="flex items-center gap-3">
             <Link to={`/apps/${env.appId}`} className="text-sm text-slate-600 hover:underline">Back to app</Link>
-            <Button variant="danger" onClick={() => void remove()}>Delete</Button>
+            <Button variant="danger" onClick={() => setDeleting(true)}>Delete</Button>
           </div>
         }
       />
+      {deleting && <DeleteEnvironmentDialog env={env} onClose={() => setDeleting(false)} />}
       <div className="space-y-6">
         <DeploymentsPanel envId={env.id} appId={env.appId} />
         <ContainersPanel envId={env.id} />

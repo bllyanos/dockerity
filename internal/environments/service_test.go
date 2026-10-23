@@ -3,6 +3,7 @@ package environments
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,7 +87,7 @@ func TestEnvironments(t *testing.T) {
 	if err != nil || got.Domain != "" {
 		t.Fatalf("unroute: %+v %v", got, err)
 	}
-	if _, err := s.Delete(ctx, e.ID); err != nil {
+	if _, err := s.Delete(ctx, e.ID, false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -100,11 +101,69 @@ func (d deploymentsFake) ListDeployments(context.Context, int64, int) ([]domain.
 	return []domain.Deployment{{Status: d.status}}, nil
 }
 
-type runtimeFake struct{ removed []string }
+type runtimeFake struct {
+	removed []string
+	ops     *[]string
+}
 
 func (r *runtimeFake) Remove(_ context.Context, app, env string) error {
 	r.removed = append(r.removed, app+"/"+env)
+	if r.ops != nil {
+		*r.ops = append(*r.ops, "teardown")
+	}
 	return nil
+}
+
+func (r *runtimeFake) RemoveVolumes(context.Context, string, string) error {
+	if r.ops != nil {
+		*r.ops = append(*r.ops, "remove volumes")
+	}
+	return nil
+}
+
+type backupsFake struct {
+	ops  *[]string
+	fail bool
+}
+
+func (b backupsFake) ArchiveEnvironment(context.Context, domain.Environment) ([]domain.Backup, error) {
+	*b.ops = append(*b.ops, "backup")
+	if b.fail {
+		return nil, errors.New("disk full")
+	}
+	return []domain.Backup{{}}, nil
+}
+
+func TestDeleteBacksUpBeforeRemovingVolumes(t *testing.T) {
+	var ops []string
+	newSvc := func(fail bool) (*Service, int64) {
+		ops = nil
+		s := &Service{Store: &memStore{}, Apps: oneApp{}, Now: time.Now,
+			Runtime: &runtimeFake{ops: &ops}, Backups: backupsFake{ops: &ops, fail: fail}}
+		e, _ := s.CreatePermanent(context.Background(), 1, "staging", "")
+		return s, e.ID
+	}
+
+	s, id := newSvc(false)
+	if _, err := s.Delete(context.Background(), id, false); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(ops, ",") != "teardown,backup,remove volumes" {
+		t.Fatalf("ops %v", ops)
+	}
+
+	s, id = newSvc(false)
+	if _, err := s.Delete(context.Background(), id, true); err != nil || strings.Join(ops, ",") != "teardown,remove volumes" {
+		t.Fatalf("skip backup: %v %v", ops, err)
+	}
+
+	s, id = newSvc(true)
+	if _, err := s.Delete(context.Background(), id, false); err == nil || strings.Join(ops, ",") != "teardown,backup" {
+		t.Fatalf("failed backup must keep the volumes: %v %v", ops, err)
+	}
+	if _, err := s.Get(context.Background(), id); err != nil {
+		t.Fatal("the environment record must be kept when the backup fails")
+	}
 }
 
 func TestDeleteGuardsAndTearsDown(t *testing.T) {
@@ -115,11 +174,11 @@ func TestDeleteGuardsAndTearsDown(t *testing.T) {
 	e.AppName = "shop"
 	s.Store.(*memStore).envs[0].AppName = "shop"
 
-	if _, err := s.Delete(ctx, e.ID); !errors.Is(err, domain.ErrConflict) || len(rt.removed) != 0 {
+	if _, err := s.Delete(ctx, e.ID, false); !errors.Is(err, domain.ErrConflict) || len(rt.removed) != 0 {
 		t.Fatalf("delete during deployment: %v %v", err, rt.removed)
 	}
 	s.Deployments = deploymentsFake{status: domain.DeploymentSucceeded}
-	if _, err := s.Delete(ctx, e.ID); err != nil || len(rt.removed) != 1 || rt.removed[0] != "shop/staging" {
+	if _, err := s.Delete(ctx, e.ID, false); err != nil || len(rt.removed) != 1 || rt.removed[0] != "shop/staging" {
 		t.Fatalf("delete: %v %v", err, rt.removed)
 	}
 }
