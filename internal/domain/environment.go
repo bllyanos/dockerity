@@ -81,7 +81,14 @@ const (
 	MaxEphemeralTTL     = 30 * 24 * time.Hour
 )
 
-// EphemeralDomain is the automatic domain <env>.<app>.<baseDomain>.
-func EphemeralDomain(env, app, baseDomain string) string {
-	return env + "." + app + "." + baseDomain
+// EphemeralDomain is the automatic domain <env>-<app>.<baseDomain>. It stays
+// one level below the base domain so a single wildcard certificate
+// (*.<baseDomain>) covers every ephemeral environment; TLS wildcards match one
+// label only. The combined label must fit in 63 characters.
+func EphemeralDomain(env, app, baseDomain string) (string, error) {
+	label := env + "-" + app
+	if len(label) > 63 {
+		return "", Invalid("name", "%q plus the app name is longer than 63 characters; use a shorter name", env)
+	}
+	return label + "." + baseDomain, nil
 }

@@ -17,3 +17,13 @@ func TestValidateDomain(t *testing.T) {
 		}
 	}
 }
+
+func TestEphemeralDomain(t *testing.T) {
+	got, err := EphemeralDomain("pr-1", "shop", "apps.example.com")
+	if err != nil || got != "pr-1-shop.apps.example.com" {
+		t.Fatalf("got %q %v", got, err)
+	}
+	if _, err := EphemeralDomain(strings.Repeat("a", 32), strings.Repeat("b", 32), "x.y"); err == nil {
+		t.Fatal("a 65-character label must be rejected")
+	}
+}

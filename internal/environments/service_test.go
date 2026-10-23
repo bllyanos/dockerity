@@ -201,7 +201,7 @@ func TestEphemeral(t *testing.T) {
 	ctx := context.Background()
 
 	e, err := s.CreateEphemeral(ctx, 1, "pr-42", 0)
-	if err != nil || e.Domain != "pr-42.shop.apps.test" || e.Type != domain.EnvEphemeral || e.TTL != domain.DefaultEphemeralTTL ||
+	if err != nil || e.Domain != "pr-42-shop.apps.test" || e.Type != domain.EnvEphemeral || e.TTL != domain.DefaultEphemeralTTL ||
 		!e.ExpiresAt.Equal(now.Add(domain.DefaultEphemeralTTL)) {
 		t.Fatalf("create %+v %v", e, err)
 	}
