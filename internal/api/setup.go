@@ -19,6 +19,7 @@ type setupHandlers struct {
 	setup  SetupService
 	// sessions, when set, logs the new admin in right after setup.
 	sessions SessionService
+	audit    auditor
 }
 
 func (h setupHandlers) register(rt *routes) {
@@ -50,6 +51,7 @@ func (h setupHandlers) run(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, r, h.logger, err)
 		return
 	}
+	h.audit.record(r, loginEvent(domain.AuditSetupCompleted, u))
 	if h.sessions != nil {
 		raw, sess, err := h.sessions.Start(r.Context(), u)
 		if err != nil {
