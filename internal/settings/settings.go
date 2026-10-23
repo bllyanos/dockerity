@@ -3,12 +3,14 @@ package settings
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/bllyanos/dockerity/internal/domain"
+	"github.com/bllyanos/dockerity/internal/routing"
 )
 
 // TLSMode is how Traefik gets certificates for app domains.
@@ -58,6 +60,30 @@ type Store interface {
 type Service struct {
 	Store Store
 	Now   func() time.Time
+	// OnChange, when set, runs after settings are saved, e.g. to rewrite
+	// Traefik's TLS and route files.
+	OnChange func(ctx context.Context, s Settings) error
+}
+
+// RouteOptions turns the TLS settings into routing options.
+func (s Settings) RouteOptions() routing.Options {
+	switch s.TLSMode {
+	case TLSCertificate:
+		return routing.Options{TLS: &routing.TLS{WildcardDomain: s.BaseDomain}}
+	case TLSResolver:
+		return routing.Options{TLS: &routing.TLS{CertResolver: s.CertResolver, WildcardDomain: s.BaseDomain}}
+	default:
+		return routing.DefaultOptions
+	}
+}
+
+// RouteOptions returns the routing options of the current settings.
+func (s *Service) RouteOptions(ctx context.Context) (routing.Options, error) {
+	cur, err := s.Get(ctx)
+	if err != nil {
+		return routing.Options{}, err
+	}
+	return cur.RouteOptions(), nil
 }
 
 // Get returns the current settings, with TLS off by default.
@@ -86,7 +112,15 @@ func (s *Service) Update(ctx context.Context, in Settings) (Settings, error) {
 		keyBaseDomain: in.BaseDomain, keyTLSMode: string(in.TLSMode),
 		keyCertFile: in.CertFile, keyKeyFile: in.KeyFile, keyCertResolver: in.CertResolver,
 	}, s.Now().UTC())
-	return in, err
+	if err != nil {
+		return Settings{}, err
+	}
+	if s.OnChange != nil {
+		if err := s.OnChange(ctx, in); err != nil {
+			return in, fmt.Errorf("settings saved, but applying them failed: %w", err)
+		}
+	}
+	return in, nil
 }
 
 var resolverName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 	"path/filepath"
@@ -110,6 +111,8 @@ func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *doc
 		Now:           time.Now,
 	}
 	s.deployRunner.Exec.Backups = s.backups
+	s.deployRunner.Exec.RouteOptions = s.settings
+	s.settings.OnChange = s.applySettings
 	s.envs.Backups = s.backups
 	return s
 }
@@ -187,4 +190,21 @@ func (s *services) apiDeps() api.Deps {
 type credentials struct {
 	sqlite.Sessions
 	sqlite.APITokens
+}
+
+// applySettings rewrites Traefik's TLS file and every route file after a
+// settings change.
+func (s *services) applySettings(ctx context.Context, cfg settings.Settings) error {
+	if cfg.TLSMode == settings.TLSCertificate {
+		data, err := routing.CertificateConfig(cfg.CertFile, cfg.KeyFile)
+		if err != nil {
+			return err
+		}
+		if err := s.routes.WriteTLS(data); err != nil {
+			return err
+		}
+	} else if err := s.routes.RemoveTLS(); err != nil {
+		return err
+	}
+	return s.deployRunner.Exec.RebuildAllRoutes(ctx)
 }
