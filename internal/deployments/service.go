@@ -6,6 +6,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/bllyanos/dockerity/internal/deploy/executor"
+	"github.com/bllyanos/dockerity/internal/deploy/warning"
 	"github.com/bllyanos/dockerity/internal/domain"
 	"github.com/bllyanos/dockerity/internal/secrets"
 )
@@ -39,7 +41,15 @@ type Service struct {
 		Latest(ctx context.Context, scope secrets.Scope) (secrets.Version, error)
 	}
 	Runner Runner
-	Now    func() time.Time
+	// Previewer plans a deployment without running it.
+	Previewer interface {
+		Preview(ctx context.Context, d domain.Deployment) (executor.Preview, error)
+	}
+	// Backups tells when volumes were last backed up, for the warning.
+	Backups interface {
+		LatestBackup(ctx context.Context, volume string) (domain.Backup, error)
+	}
+	Now func() time.Time
 }
 
 // ListLimit is how many deployments List returns.
@@ -48,35 +58,11 @@ const ListLimit = 50
 // Start deploys a succeeded build of the environment's app with the app's
 // latest spec and the environment's latest secrets.
 func (s *Service) Start(ctx context.Context, envID, buildID int64, actor *int64) (domain.Deployment, error) {
-	env, err := s.Envs.Get(ctx, envID)
+	draft, env, err := s.draft(ctx, envID, buildID, actor)
 	if err != nil {
 		return domain.Deployment{}, err
 	}
-	b, err := s.Builds.GetBuild(ctx, buildID)
-	if errors.Is(err, domain.ErrNotFound) || (err == nil && b.AppID != env.AppID) {
-		return domain.Deployment{}, domain.Invalid("buildId", "build %d does not belong to app %s", buildID, env.AppName)
-	}
-	if err != nil {
-		return domain.Deployment{}, err
-	}
-	if b.Status != domain.BuildSucceeded {
-		return domain.Deployment{}, domain.Invalid("buildId", "build %d is %s; only succeeded builds can be deployed", buildID, b.Status)
-	}
-	sv, err := s.Specs.Latest(ctx, env.AppID)
-	if err != nil {
-		return domain.Deployment{}, err
-	}
-	secretVersion := 0
-	if v, err := s.Secrets.Latest(ctx, secrets.EnvScope(env.ID)); err == nil {
-		secretVersion = v.Version
-	} else if !errors.Is(err, domain.ErrNotFound) {
-		return domain.Deployment{}, err
-	}
-
-	d, err := s.Store.CreateDeployment(ctx, domain.Deployment{
-		EnvID: env.ID, BuildID: b.ID, SpecVersion: sv.Version, SecretVersion: secretVersion,
-		TriggeredBy: actor, CreatedAt: s.Now().UTC(),
-	})
+	d, err := s.Store.CreateDeployment(ctx, draft)
 	if errors.Is(err, domain.ErrConflict) {
 		return domain.Deployment{}, domain.Conflictf("a deployment is already in progress in %s/%s", env.AppName, env.Name)
 	}
@@ -85,6 +71,66 @@ func (s *Service) Start(ctx context.Context, envID, buildID int64, actor *int64)
 	}
 	s.Runner.Submit(d.ID)
 	return d, nil
+}
+
+// Preview explains what deploying buildID would do, without doing it.
+func (s *Service) Preview(ctx context.Context, envID, buildID int64) (warning.Warning, error) {
+	draft, env, err := s.draft(ctx, envID, buildID, nil)
+	if err != nil {
+		return warning.Warning{}, err
+	}
+	p, err := s.Previewer.Preview(ctx, draft)
+	if err != nil {
+		return warning.Warning{}, err
+	}
+	last := map[string]time.Time{}
+	for _, svc := range p.Spec.Services {
+		for _, v := range svc.Volumes {
+			name := domain.VolumeName(env.AppName, env.Name, svc.Name, v.Name)
+			b, err := s.Backups.LatestBackup(ctx, name)
+			if err == nil {
+				last[name] = b.CreatedAt
+			} else if !errors.Is(err, domain.ErrNotFound) {
+				return warning.Warning{}, err
+			}
+		}
+	}
+	return warning.Build(warning.Input{
+		App: env.AppName, Env: env.Name, Spec: p.Spec, Plan: p.Plan, Current: p.Current, LastBackups: last,
+	}), nil
+}
+
+// draft validates a deploy request and returns the deployment it would create.
+func (s *Service) draft(ctx context.Context, envID, buildID int64, actor *int64) (domain.Deployment, domain.Environment, error) {
+	env, err := s.Envs.Get(ctx, envID)
+	if err != nil {
+		return domain.Deployment{}, env, err
+	}
+	b, err := s.Builds.GetBuild(ctx, buildID)
+	if errors.Is(err, domain.ErrNotFound) || (err == nil && b.AppID != env.AppID) {
+		return domain.Deployment{}, env, domain.Invalid("buildId", "build %d does not belong to app %s", buildID, env.AppName)
+	}
+	if err != nil {
+		return domain.Deployment{}, env, err
+	}
+	if b.Status != domain.BuildSucceeded {
+		return domain.Deployment{}, env, domain.Invalid("buildId", "build %d is %s; only succeeded builds can be deployed", buildID, b.Status)
+	}
+	sv, err := s.Specs.Latest(ctx, env.AppID)
+	if err != nil {
+		return domain.Deployment{}, env, err
+	}
+	secretVersion := 0
+	if v, err := s.Secrets.Latest(ctx, secrets.EnvScope(env.ID)); err == nil {
+		secretVersion = v.Version
+	} else if !errors.Is(err, domain.ErrNotFound) {
+		return domain.Deployment{}, env, err
+	}
+
+	return domain.Deployment{
+		EnvID: env.ID, BuildID: b.ID, SpecVersion: sv.Version, SecretVersion: secretVersion,
+		TriggeredBy: actor, CreatedAt: s.Now().UTC(),
+	}, env, nil
 }
 
 // List returns an environment's recent deployments.
