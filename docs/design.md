@@ -312,6 +312,12 @@ Shown before any deployment whose plan contains a `recreate` step:
 - **Local users only** for now: password hashed with argon2id, session cookie for the UI,
   API tokens for automation. SSO is out of scope.
 - The first admin user is created on first startup (setup screen).
+- Sessions: opaque token in an `HttpOnly`, `SameSite=Lax` cookie (`Secure` behind HTTPS),
+  only its SHA-256 digest is stored, sliding 7-day idle expiry. CSRF is handled by Go's
+  `http.CrossOriginProtection` (Sec-Fetch-Site / Origin checks). Failed logins are rate
+  limited per username and per client IP.
+- Every `/api/v1` route requires authentication unless explicitly registered as public
+  (setup and login only).
 - Audit log for deploys, secret changes, environment create and delete.
 
 ## 12. Code layout
