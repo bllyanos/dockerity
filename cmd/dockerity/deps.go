@@ -80,6 +80,13 @@ func (s *services) apiDeps() api.Deps {
 		Audit: sqlite.AuditLog{DB: db},
 		Apps:  s.apps,
 		Specs: s.specs,
+		Builds: &build.Service{
+			Builds: sqlite.Builds{DB: db},
+			Apps:   s.apps,
+			Queue:  s.buildRunner,
+			Now:    time.Now,
+		},
+		BuildLogs: api.BuildLogs{Store: s.buildLogs, Hub: s.buildHub},
 		ConnectionTester: &apps.ConnectionTester{
 			Apps: s.apps,
 			Keys: s.deployKeys,
