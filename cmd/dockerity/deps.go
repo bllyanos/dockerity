@@ -22,6 +22,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/environments"
 	"github.com/bllyanos/dockerity/internal/envsecrets"
 	"github.com/bllyanos/dockerity/internal/gitx"
+	"github.com/bllyanos/dockerity/internal/reaper"
 	"github.com/bllyanos/dockerity/internal/routing"
 	"github.com/bllyanos/dockerity/internal/secrets"
 	"github.com/bllyanos/dockerity/internal/settings"
@@ -210,4 +211,15 @@ func (s *services) applySettings(ctx context.Context, cfg settings.Settings) err
 		return err
 	}
 	return s.deployRunner.Exec.RebuildAllRoutes(ctx)
+}
+
+// reaper deletes expired ephemeral environments.
+func (s *services) reaper() *reaper.Reaper {
+	return &reaper.Reaper{
+		Expired: sqlite.Environments{DB: s.db},
+		Envs:    s.envs,
+		Audit:   sqlite.AuditLog{DB: s.db},
+		Logger:  s.logger.With("component", "reaper"),
+		Now:     time.Now,
+	}
 }
