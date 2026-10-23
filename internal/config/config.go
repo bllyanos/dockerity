@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -17,6 +18,7 @@ const (
 	EnvMasterKeyFile = "DOCKERITY_MASTER_KEY_FILE"
 	EnvLogLevel      = "DOCKERITY_LOG_LEVEL"
 	EnvBuildWorkers  = "DOCKERITY_BUILD_WORKERS"
+	EnvTraefikDir    = "DOCKERITY_TRAEFIK_DYNAMIC_DIR"
 )
 
 // Defaults match the bootstrap compose file (docs/design.md section 13).
@@ -37,6 +39,9 @@ type Config struct {
 	LogLevel      slog.Level
 	// BuildWorkers is how many builds may run at once.
 	BuildWorkers int
+	// TraefikDir is the directory of Traefik's file provider, shared with
+	// Traefik. It defaults to <DataDir>/traefik.
+	TraefikDir string
 }
 
 // LookupFunc has the signature of os.LookupEnv.
@@ -59,6 +64,7 @@ func Load(lookup LookupFunc) (Config, error) {
 		LogLevel:      level,
 		BuildWorkers:  DefaultBuildWorkers,
 	}
+	cfg.TraefikDir = get(EnvTraefikDir, filepath.Join(cfg.DataDir, "traefik"))
 
 	var errs []error
 	if levelErr != nil {
