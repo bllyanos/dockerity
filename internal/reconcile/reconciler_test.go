@@ -161,3 +161,17 @@ func TestRunOnceSkipsBusyEnvironments(t *testing.T) {
 		t.Fatalf("busy environment touched: removed %v rebuilt %v", d.removed, rt.rebuilt)
 	}
 }
+
+type countingGC struct{ runs int }
+
+func (g *countingGC) Collect(context.Context) error { g.runs++; return nil }
+
+func TestRunOnceCollectsImages(t *testing.T) {
+	r, _, _ := setup()
+	gc := &countingGC{}
+	r.ImageGC = gc
+	r.RunOnce(context.Background())
+	if gc.runs != 1 {
+		t.Fatalf("collections %d", gc.runs)
+	}
+}

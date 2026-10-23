@@ -60,8 +60,12 @@ type Reconciler struct {
 	Docker      Docker
 	Routes      Routes
 	Rebuilder   Rebuilder
-	Logger      *slog.Logger
-	Interval    time.Duration
+	// ImageGC, when set, runs after every round.
+	ImageGC interface {
+		Collect(ctx context.Context) error
+	}
+	Logger   *slog.Logger
+	Interval time.Duration
 }
 
 // Check reports an environment's drift without repairing it.
@@ -110,6 +114,11 @@ func (r *Reconciler) RunOnce(ctx context.Context) {
 		}
 		if err := r.reconcile(ctx, env); err != nil {
 			r.Logger.Error("reconcile environment", "env", env.AppName+"/"+env.Name, "error", err)
+		}
+	}
+	if r.ImageGC != nil {
+		if err := r.ImageGC.Collect(ctx); err != nil {
+			r.Logger.Error("image garbage collection", "error", err)
 		}
 	}
 }
