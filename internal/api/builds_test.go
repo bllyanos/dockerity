@@ -62,6 +62,14 @@ func TestBuildLogsPlainText(t *testing.T) {
 	}
 }
 
+func TestExpiredBuildLog(t *testing.T) {
+	h, raw, _, _, _ := buildsRouter(t)
+	rec := bearer(h, http.MethodGet, APIPrefix+"/builds/2/logs", raw, "")
+	if rec.Code != http.StatusOK || rec.Body.String() != buildlog.ExpiredNotice {
+		t.Fatalf("expired log: %d %q", rec.Code, rec.Body)
+	}
+}
+
 // sseEvents reads "event:"/"data:" pairs until the stream ends.
 func sseEvents(t *testing.T, body io.Reader) [][2]string {
 	t.Helper()

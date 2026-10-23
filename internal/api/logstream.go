@@ -22,7 +22,7 @@ type LogSource struct {
 // a JSON string; an "end" event closes the stream.
 func serveLog(w http.ResponseWriter, r *http.Request, logger *slog.Logger, src LogSource, id int64, finished bool) {
 	if !strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
-		data, err := src.Store.Read(id)
+		data, err := readLog(src, id, finished)
 		if err != nil {
 			writeServiceError(w, r, logger, err)
 			return
@@ -40,7 +40,7 @@ func serveLog(w http.ResponseWriter, r *http.Request, logger *slog.Logger, src L
 		defer unsubscribe()
 		live = ch
 	}
-	data, err := src.Store.Read(id)
+	data, err := readLog(src, id, finished)
 	if err != nil {
 		writeServiceError(w, r, logger, err)
 		return
@@ -80,4 +80,14 @@ func serveLog(w http.ResponseWriter, r *http.Request, logger *slog.Logger, src L
 		}
 	}
 	send("end", "")
+}
+
+// readLog reads a stored log. A finished one without a file had its log
+// deleted by retention, which the notice says.
+func readLog(src LogSource, id int64, finished bool) ([]byte, error) {
+	data, err := src.Store.Read(id)
+	if err == nil && finished && len(data) == 0 {
+		data = []byte(buildlog.ExpiredNotice)
+	}
+	return data, err
 }
