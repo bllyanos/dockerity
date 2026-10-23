@@ -34,6 +34,24 @@ func (r Environments) ListEnvironments(ctx context.Context, appID int64) ([]doma
 	return out, rows.Err()
 }
 
+// ListAllEnvironments returns every environment of every app.
+func (r Environments) ListAllEnvironments(ctx context.Context) ([]domain.Environment, error) {
+	rows, err := r.DB.QueryContext(ctx, envSelect+` ORDER BY e.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.Environment
+	for rows.Next() {
+		e, err := scanEnv(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // GetEnvironment returns the environment or domain.ErrNotFound.
 func (r Environments) GetEnvironment(ctx context.Context, id int64) (domain.Environment, error) {
 	return scanEnv(r.DB.QueryRowContext(ctx, envSelect+` WHERE e.id = ?`, id))

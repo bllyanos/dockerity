@@ -30,6 +30,7 @@ type Docker interface {
 // Store persists deployments and their steps.
 type Store interface {
 	GetDeployment(ctx context.Context, id int64) (domain.Deployment, error)
+	CurrentDeployment(ctx context.Context, envID int64) (domain.Deployment, error)
 	ListDeploymentsByStatus(ctx context.Context, status domain.DeploymentStatus) ([]domain.Deployment, error)
 	StartDeployment(ctx context.Context, id int64, at time.Time) error
 	FinishDeployment(ctx context.Context, id int64, to domain.DeploymentStatus, errMsg string, at time.Time) error

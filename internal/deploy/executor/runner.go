@@ -35,6 +35,10 @@ func (r *Runner) Start(ctx context.Context) error {
 			r.Exec.Logger.Warn("marked interrupted deployment as failed", "deployment", d.ID)
 		}
 	}
+	// Containers may have changed while Dockerity was down; make routes match.
+	if err := r.Exec.RebuildAllRoutes(ctx); err != nil {
+		r.Exec.Logger.Error("rebuild routes", "error", err)
+	}
 	return nil
 }
 
