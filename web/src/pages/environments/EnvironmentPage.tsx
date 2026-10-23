@@ -12,6 +12,7 @@ import { DeploymentsPanel } from '../deployments/DeploymentsPanel'
 import { BackupsPanel } from './BackupsPanel'
 import { ContainersPanel } from './ContainersPanel'
 import { DeleteEnvironmentDialog } from './DeleteEnvironmentDialog'
+import { DriftPanel } from './DriftPanel'
 import { ResourcesPanel } from './ResourcesPanel'
 import { SecretsPanel } from './SecretsPanel'
 
@@ -47,6 +48,7 @@ export function EnvironmentPage() {
       />
       {deleting && <DeleteEnvironmentDialog env={env} onClose={() => setDeleting(false)} />}
       <div className="space-y-6">
+        <DriftPanel envId={env.id} />
         <DeploymentsPanel envId={env.id} appId={env.appId} />
         <ContainersPanel envId={env.id} />
         <BackupsPanel envId={env.id} />
