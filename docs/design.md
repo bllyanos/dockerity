@@ -184,7 +184,13 @@ problem is reported with its line and column.
 
 - Dockerity talks to Docker through the mounted socket, using the official Go Docker SDK.
   It does **not** shell out to `docker compose`, because compose cannot do blue-green.
-- Traefik discovers containers through labels. Dockerity sets those labels.
+- App traffic is routed by Traefik's **file provider**: Dockerity writes one dynamic
+  configuration file per environment (routers by domain and path, and an explicit server
+  list of container names on the environment network) into a volume shared with Traefik.
+  Labels cannot change on a running container, so with labels an old blue-green container
+  could not leave routing while it drains; with the file, Dockerity adds a container only
+  once it is healthy and removes it before stopping it. Dockerity's own UI is still routed
+  by labels from the bootstrap compose file.
 - Dockerity and Traefik are **system containers**. They carry the label
   `dockerity.system=true` and are excluded from every deploy, cleanup and GC operation.
 
