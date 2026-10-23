@@ -192,3 +192,33 @@ func TestRestore(t *testing.T) {
 		t.Fatalf("missing: %v", err)
 	}
 }
+
+func TestArchiveEnvironment(t *testing.T) {
+	s, d, st := newService(t)
+	got, err := s.ArchiveEnvironment(context.Background(), domain.Environment{ID: 1, AppName: "shop", Name: "prod"})
+	if err != nil || len(got) != 2 || got[0].Reason != domain.BackupEnvDelete {
+		t.Fatalf("backups %+v %v", got, err)
+	}
+	for _, op := range d.ops {
+		if strings.HasPrefix(op, "stop") || strings.HasPrefix(op, "start") {
+			t.Fatalf("containers are already gone; got %v", d.ops)
+		}
+	}
+	if len(st.backups) != 2 {
+		t.Fatalf("stored %d", len(st.backups))
+	}
+}
+
+type nothingDeployed struct{}
+
+func (nothingDeployed) CurrentSpec(context.Context, domain.Environment) (spec.Spec, error) {
+	return spec.Spec{}, domain.Conflictf("nothing is deployed")
+}
+
+func TestArchiveEnvironmentWithNothingDeployed(t *testing.T) {
+	s, _, _ := newService(t)
+	s.Specs = nothingDeployed{}
+	if got, err := s.ArchiveEnvironment(context.Background(), domain.Environment{ID: 1}); err != nil || len(got) != 0 {
+		t.Fatalf("got %v %v", got, err)
+	}
+}

@@ -135,3 +135,20 @@ func lastLine(s string) string {
 	lines := strings.Split(strings.TrimSpace(s), "\n")
 	return lines[len(lines)-1]
 }
+
+// ListVolumes returns the names of volumes carrying all labels.
+func (c *Client) ListVolumes(ctx context.Context, labels map[string]string) ([]string, error) {
+	f := make(client.Filters)
+	for k, v := range labels {
+		f.Add("label", k+"="+v)
+	}
+	res, err := c.api.VolumeList(ctx, client.VolumeListOptions{Filters: f})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(res.Items))
+	for _, v := range res.Items {
+		out = append(out, v.Name)
+	}
+	return out, nil
+}

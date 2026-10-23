@@ -14,6 +14,8 @@ type TeardownDocker interface {
 	StopContainer(ctx context.Context, id string, grace time.Duration) error
 	RemoveContainer(ctx context.Context, id string) error
 	RemoveNetwork(ctx context.Context, name string) error
+	ListVolumes(ctx context.Context, labels map[string]string) ([]string, error)
+	RemoveVolume(ctx context.Context, name string) error
 }
 
 // Teardown removes an environment's containers and network. Volumes are kept:
@@ -44,4 +46,18 @@ func (t Teardown) Remove(ctx context.Context, app, env string) error {
 		}
 	}
 	return t.Docker.RemoveNetwork(ctx, domain.NetworkName(app, env))
+}
+
+// RemoveVolumes deletes the environment's volumes. Back them up first.
+func (t Teardown) RemoveVolumes(ctx context.Context, app, env string) error {
+	names, err := t.Docker.ListVolumes(ctx, map[string]string{domain.LabelApp: app, domain.LabelEnv: env})
+	if err != nil {
+		return err
+	}
+	for _, n := range names {
+		if err := t.Docker.RemoveVolume(ctx, n); err != nil {
+			return err
+		}
+	}
+	return nil
 }
