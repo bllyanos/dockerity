@@ -22,6 +22,7 @@ import (
 	"github.com/bllyanos/dockerity/internal/environments"
 	"github.com/bllyanos/dockerity/internal/envsecrets"
 	"github.com/bllyanos/dockerity/internal/gitx"
+	"github.com/bllyanos/dockerity/internal/imagegc"
 	"github.com/bllyanos/dockerity/internal/reaper"
 	"github.com/bllyanos/dockerity/internal/reconcile"
 	"github.com/bllyanos/dockerity/internal/routing"
@@ -114,6 +115,7 @@ func newServices(cfg config.Config, logger *slog.Logger, db *sql.DB, docker *doc
 		Now:           time.Now,
 	}
 	s.deployRunner.Exec.Backups = s.backups
+	s.deployRunner.Exec.ImageGC = s.imageGC()
 	s.deployRunner.Exec.RouteOptions = s.settings
 	s.settings.OnChange = s.applySettings
 	s.envs.Backups = s.backups
@@ -235,6 +237,7 @@ func (s *services) reconciler() *reconcile.Reconciler {
 		Docker:      s.docker,
 		Routes:      s.routes,
 		Rebuilder:   s.deployRunner.Exec,
+		ImageGC:     s.deployRunner.Exec.ImageGC,
 		Logger:      s.logger.With("component", "reconcile"),
 	}
 }
@@ -243,4 +246,21 @@ func (s *services) reconciler() *reconcile.Reconciler {
 type allEnvs struct {
 	*environments.Service
 	sqlite.Environments
+}
+
+// imageGC removes images of old builds.
+func (s *services) imageGC() *imagegc.Collector {
+	return &imagegc.Collector{
+		Store:  gcStore{sqlite.Apps{DB: s.db}, sqlite.Environments{DB: s.db}, sqlite.Deployments{DB: s.db}, sqlite.Builds{DB: s.db}},
+		Docker: s.docker,
+		Logger: s.logger.With("component", "imagegc"),
+	}
+}
+
+// gcStore combines the stores the image collector reads.
+type gcStore struct {
+	sqlite.Apps
+	sqlite.Environments
+	sqlite.Deployments
+	sqlite.Builds
 }
