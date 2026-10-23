@@ -46,7 +46,12 @@ type CreateInput struct {
 type UpdateInput struct {
 	RepoURL       *string
 	DefaultBranch *string
+	// MaxEphemeral limits active ephemeral environments; 0 removes the limit.
+	MaxEphemeral *int
 }
+
+// MaxEphemeralLimit bounds the per-app ephemeral environment limit.
+const MaxEphemeralLimit = 1000
 
 // List returns all apps.
 func (s *Service) List(ctx context.Context) ([]domain.App, error) {
@@ -127,6 +132,12 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) (domain.
 	}
 	if in.DefaultBranch != nil {
 		a.DefaultBranch = strings.TrimSpace(*in.DefaultBranch)
+	}
+	if in.MaxEphemeral != nil {
+		if *in.MaxEphemeral < 0 || *in.MaxEphemeral > MaxEphemeralLimit {
+			return domain.App{}, domain.Invalid("maxEphemeral", "must be between 0 (no limit) and %d", MaxEphemeralLimit)
+		}
+		a.MaxEphemeral = *in.MaxEphemeral
 	}
 	if err := validate(a, false); err != nil {
 		return domain.App{}, err

@@ -194,7 +194,7 @@ func (e *Executor) plan(ctx context.Context, dep domain.Deployment) (*job, map[s
 		}
 		cs, err := containerspec.Build(containerspec.Input{
 			App: env.AppName, Env: env.Name, DeploymentID: dep.ID,
-			Service: svc, Image: image, Secrets: values,
+			Service: svc, Image: image, Secrets: values, Override: env.Resources.For(svc.Name),
 		})
 		if err != nil {
 			return nil, nil, fmt.Errorf("service %s: %w", svc.Name, err)

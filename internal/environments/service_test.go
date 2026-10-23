@@ -53,18 +53,33 @@ func (m *memStore) SetExpiry(_ context.Context, id int64, t time.Time) error {
 	return nil
 }
 
+func (m *memStore) SetResources(_ context.Context, id int64, o domain.ResourceOverrides) error {
+	m.envs[id-1].Resources = o
+	return nil
+}
+
+func (m *memStore) CountEphemeral(_ context.Context, appID int64) (int, error) {
+	n := 0
+	for _, e := range m.envs {
+		if e.AppID == appID && e.Type == domain.EnvEphemeral && e.ID > 0 {
+			n++
+		}
+	}
+	return n, nil
+}
+
 func (m *memStore) DeleteEnvironment(_ context.Context, id int64) error {
 	m.envs[id-1].ID = -1
 	return nil
 }
 
-type oneApp struct{}
+type oneApp struct{ max int }
 
-func (oneApp) Get(_ context.Context, id int64) (domain.App, error) {
+func (a oneApp) Get(_ context.Context, id int64) (domain.App, error) {
 	if id != 1 {
 		return domain.App{}, domain.ErrNotFound
 	}
-	return domain.App{ID: 1, Name: "shop"}, nil
+	return domain.App{ID: 1, Name: "shop", MaxEphemeral: a.max}, nil
 }
 
 func TestEnvironments(t *testing.T) {
@@ -222,5 +237,38 @@ func TestEphemeral(t *testing.T) {
 	s.Settings = baseDomain("")
 	if _, err := s.CreateEphemeral(ctx, 1, "pr-44", 0); !errors.As(err, &ve) {
 		t.Fatalf("no base domain: %v", err)
+	}
+}
+
+func TestEphemeralLimit(t *testing.T) {
+	s := &Service{Store: &memStore{}, Apps: oneApp{max: 2}, Settings: baseDomain("apps.test"), Now: time.Now}
+	ctx := context.Background()
+	for _, n := range []string{"pr-1", "pr-2"} {
+		if _, err := s.CreateEphemeral(ctx, 1, n, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := s.CreateEphemeral(ctx, 1, "pr-3", 0)
+	if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "already has 2 ephemeral environments") {
+		t.Fatalf("limit: %v", err)
+	}
+	if _, err := s.CreatePermanent(ctx, 1, "prod", ""); err != nil {
+		t.Fatalf("permanent environments are not limited: %v", err)
+	}
+}
+
+func TestSetResources(t *testing.T) {
+	s := &Service{Store: &memStore{}, Apps: oneApp{}, Now: time.Now}
+	ctx := context.Background()
+	e, _ := s.CreatePermanent(ctx, 1, "prod", "")
+	got, err := s.SetResources(ctx, e.ID, domain.ResourceOverrides{"*": {Memory: "512m"}, "db": {CPUs: "2"}})
+	if err != nil || got.Resources.For("db") != (domain.ResourceOverride{Memory: "512m", CPUs: "2"}) {
+		t.Fatalf("set %+v %v", got.Resources, err)
+	}
+	var ve *domain.ValidationError
+	for _, bad := range []domain.ResourceOverrides{{"db": {Memory: "lots"}}, {"db": {CPUs: "0"}}, {"Bad Name": {}}} {
+		if _, err := s.SetResources(ctx, e.ID, bad); !errors.As(err, &ve) {
+			t.Errorf("%v accepted: %v", bad, err)
+		}
 	}
 }

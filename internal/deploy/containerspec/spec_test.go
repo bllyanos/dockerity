@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bllyanos/dockerity/internal/domain"
 	"github.com/bllyanos/dockerity/internal/secrets/inject"
 	"github.com/bllyanos/dockerity/internal/spec"
 )
@@ -152,5 +153,19 @@ func TestFingerprint(t *testing.T) {
 	}
 	if strings.Contains(a.Fingerprint(), "mysql") {
 		t.Fatal("fingerprint must be a hash")
+	}
+}
+
+func TestOverrideResources(t *testing.T) {
+	in := input(service(t, apiSpec, "api"))
+	in.Override = domain.ResourceOverride{Memory: "1g"}
+	s, err := Build(in)
+	if err != nil || s.MemoryBytes != 1<<30 || s.NanoCPUs != 500_000_000 {
+		t.Fatalf("override %+v %v", s, err)
+	}
+	in = input(service(t, apiSpec, "db"))
+	in.Override = domain.ResourceOverride{CPUs: "2"}
+	if s, _ := Build(in); s.NanoCPUs != 2_000_000_000 || s.MemoryBytes != 0 {
+		t.Fatalf("override without spec resources %+v", s)
 	}
 }
