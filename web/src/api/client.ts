@@ -1,9 +1,12 @@
 export class ApiError extends Error {
   readonly status: number
+  /** The parsed JSON error body, for endpoints that return details. */
+  readonly body: unknown
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, body: unknown = null) {
     super(message)
     this.status = status
+    this.body = body
   }
 }
 
@@ -37,7 +40,7 @@ export async function api<T>(path: string, opts: Options = {}): Promise<T> {
     if (res.status === 401) onUnauthorized?.()
     const message =
       data && typeof data === 'object' && 'error' in data ? String(data.error) : `HTTP ${res.status}`
-    throw new ApiError(res.status, message)
+    throw new ApiError(res.status, message, data)
   }
   return data as T
 }
