@@ -66,6 +66,53 @@ func (s *Service) Start(ctx context.Context, envID, buildID int64, actor *int64)
 	if err != nil {
 		return domain.Deployment{}, err
 	}
+	return s.submit(ctx, draft, env)
+}
+
+// Rollback deploys again exactly what a succeeded deployment ran: its build,
+// spec version and secret version. History is not rewritten; this is a new
+// deployment.
+func (s *Service) Rollback(ctx context.Context, deploymentID int64, actor *int64) (domain.Deployment, error) {
+	draft, env, err := s.rollbackDraft(ctx, deploymentID, actor)
+	if err != nil {
+		return domain.Deployment{}, err
+	}
+	return s.submit(ctx, draft, env)
+}
+
+// PreviewRollback explains what rolling back to deploymentID would do.
+func (s *Service) PreviewRollback(ctx context.Context, deploymentID int64) (warning.Warning, error) {
+	draft, env, err := s.rollbackDraft(ctx, deploymentID, nil)
+	if err != nil {
+		return warning.Warning{}, err
+	}
+	return s.preview(ctx, draft, env)
+}
+
+func (s *Service) rollbackDraft(ctx context.Context, deploymentID int64, actor *int64) (domain.Deployment, domain.Environment, error) {
+	target, err := s.Store.GetDeployment(ctx, deploymentID)
+	if errors.Is(err, domain.ErrNotFound) {
+		return domain.Deployment{}, domain.Environment{}, domain.NotFoundf("deployment %d not found", deploymentID)
+	}
+	if err != nil {
+		return domain.Deployment{}, domain.Environment{}, err
+	}
+	if target.Status != domain.DeploymentSucceeded {
+		return domain.Deployment{}, domain.Environment{}, domain.Invalid("deployment", "deployment %d %s; only succeeded deployments can be rolled back to", target.ID, target.Status)
+	}
+	env, err := s.Envs.Get(ctx, target.EnvID)
+	if err != nil {
+		return domain.Deployment{}, env, err
+	}
+	return domain.Deployment{
+		EnvID: env.ID, BuildID: target.BuildID, SpecVersion: target.SpecVersion, SecretVersion: target.SecretVersion,
+		TriggeredBy: actor, CreatedAt: s.Now().UTC(),
+	}, env, nil
+}
+
+// submit stores a pending deployment (the environment lock rejects a second
+// one), extends the environment and hands it to the runner.
+func (s *Service) submit(ctx context.Context, draft domain.Deployment, env domain.Environment) (domain.Deployment, error) {
 	d, err := s.Store.CreateDeployment(ctx, draft)
 	if errors.Is(err, domain.ErrConflict) {
 		return domain.Deployment{}, domain.Conflictf("a deployment is already in progress in %s/%s", env.AppName, env.Name)
@@ -88,6 +135,10 @@ func (s *Service) Preview(ctx context.Context, envID, buildID int64) (warning.Wa
 	if err != nil {
 		return warning.Warning{}, err
 	}
+	return s.preview(ctx, draft, env)
+}
+
+func (s *Service) preview(ctx context.Context, draft domain.Deployment, env domain.Environment) (warning.Warning, error) {
 	p, err := s.Previewer.Preview(ctx, draft)
 	if err != nil {
 		return warning.Warning{}, err
