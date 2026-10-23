@@ -27,8 +27,9 @@ export async function updateEnvironmentDomain(id: number, domain: string): Promi
   return (await api<{ environment: Environment }>(`/environments/${id}`, { method: 'PATCH', body: { domain } })).environment
 }
 
-export async function deleteEnvironment(id: number): Promise<void> {
-  await api<void>(`/environments/${id}`, { method: 'DELETE' })
+/** Deletes an environment; its stateful volumes are backed up first unless skipBackup. */
+export async function deleteEnvironment(id: number, skipBackup = false): Promise<void> {
+  await api<void>(`/environments/${id}${skipBackup ? '?skipBackup=true' : ''}`, { method: 'DELETE' })
 }
 
 export type EnvContainer = {
