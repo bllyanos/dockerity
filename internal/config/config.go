@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strconv"
 	"strings"
 )
 
@@ -15,6 +16,7 @@ const (
 	EnvDataDir       = "DOCKERITY_DATA_DIR"
 	EnvMasterKeyFile = "DOCKERITY_MASTER_KEY_FILE"
 	EnvLogLevel      = "DOCKERITY_LOG_LEVEL"
+	EnvBuildWorkers  = "DOCKERITY_BUILD_WORKERS"
 )
 
 // Defaults match the bootstrap compose file (docs/design.md section 13).
@@ -23,6 +25,8 @@ const (
 	DefaultDataDir       = "/data"
 	DefaultMasterKeyFile = "/run/secrets/master_key"
 	DefaultLogLevel      = "info"
+	DefaultBuildWorkers  = 1
+	maxBuildWorkers      = 16
 )
 
 // Config is the validated runtime configuration.
@@ -31,6 +35,8 @@ type Config struct {
 	DataDir       string
 	MasterKeyFile string
 	LogLevel      slog.Level
+	// BuildWorkers is how many builds may run at once.
+	BuildWorkers int
 }
 
 // LookupFunc has the signature of os.LookupEnv.
@@ -51,11 +57,20 @@ func Load(lookup LookupFunc) (Config, error) {
 		DataDir:       get(EnvDataDir, DefaultDataDir),
 		MasterKeyFile: get(EnvMasterKeyFile, DefaultMasterKeyFile),
 		LogLevel:      level,
+		BuildWorkers:  DefaultBuildWorkers,
 	}
 
 	var errs []error
 	if levelErr != nil {
 		errs = append(errs, levelErr)
+	}
+	if v := get(EnvBuildWorkers, ""); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > maxBuildWorkers {
+			errs = append(errs, fmt.Errorf("%s: must be between 1 and %d", EnvBuildWorkers, maxBuildWorkers))
+		} else {
+			cfg.BuildWorkers = n
+		}
 	}
 	if _, _, err := net.SplitHostPort(cfg.ListenAddr); err != nil {
 		errs = append(errs, fmt.Errorf("%s: %w", EnvListenAddr, err))

@@ -23,6 +23,7 @@ func TestLoadDefaults(t *testing.T) {
 		DataDir:       DefaultDataDir,
 		MasterKeyFile: DefaultMasterKeyFile,
 		LogLevel:      slog.LevelInfo,
+		BuildWorkers:  DefaultBuildWorkers,
 	}
 	if cfg != want {
 		t.Fatalf("got %+v, want %+v", cfg, want)
@@ -35,12 +36,13 @@ func TestLoadOverrides(t *testing.T) {
 		EnvDataDir:       " /tmp/dkt ",
 		EnvMasterKeyFile: "/tmp/key",
 		EnvLogLevel:      "DEBUG",
+		EnvBuildWorkers:  "3",
 	}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if cfg.ListenAddr != "127.0.0.1:9000" || cfg.DataDir != "/tmp/dkt" ||
-		cfg.MasterKeyFile != "/tmp/key" || cfg.LogLevel != slog.LevelDebug {
+		cfg.MasterKeyFile != "/tmp/key" || cfg.LogLevel != slog.LevelDebug || cfg.BuildWorkers != 3 {
 		t.Fatalf("overrides not applied: %+v", cfg)
 	}
 }
@@ -57,13 +59,14 @@ func TestLoadBlankFallsBackToDefault(t *testing.T) {
 
 func TestLoadInvalid(t *testing.T) {
 	_, err := Load(lookupFrom(map[string]string{
-		EnvListenAddr: "no-port",
-		EnvLogLevel:   "loud",
+		EnvListenAddr:   "no-port",
+		EnvLogLevel:     "loud",
+		EnvBuildWorkers: "0",
 	}))
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	for _, key := range []string{EnvListenAddr, EnvLogLevel} {
+	for _, key := range []string{EnvListenAddr, EnvLogLevel, EnvBuildWorkers} {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("error %q does not mention %s", err, key)
 		}
