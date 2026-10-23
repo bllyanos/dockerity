@@ -70,7 +70,13 @@ func run(ctx context.Context) error {
 	}
 	defer docker.Close()
 
-	router := api.NewRouter(buildDeps(logger, db, docker, keyring))
+	svc := newServices(cfg, logger, db, docker, keyring)
+	if err := svc.buildRunner.Start(ctx); err != nil {
+		return fmt.Errorf("build runner: %w", err)
+	}
+	defer svc.buildRunner.Wait()
+
+	router := api.NewRouter(svc.apiDeps())
 	return httpserver.Run(ctx, logger, cfg.ListenAddr, router)
 }
 
