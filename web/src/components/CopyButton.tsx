@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Button } from './form/Button'
+import { IconButton } from './ui/IconButton'
 
-export function CopyButton({ text }: { text: string }) {
+export function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false)
 
   async function copy() {
@@ -10,9 +10,5 @@ export function CopyButton({ text }: { text: string }) {
     setTimeout(() => setCopied(false), 1500)
   }
 
-  return (
-    <Button type="button" variant="secondary" onClick={() => void copy()}>
-      {copied ? 'Copied' : 'Copy'}
-    </Button>
-  )
+  return <IconButton icon={copied ? 'check' : 'content_copy'} label={copied ? 'Copied' : label} variant="tonal" onClick={() => void copy()} />
 }

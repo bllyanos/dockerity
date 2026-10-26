@@ -19,15 +19,15 @@ export function CodeEditor({ value, onChange, errorLines = new Set(), readOnly =
   }
 
   return (
-    <div className="flex overflow-hidden rounded-md border border-slate-300 bg-white font-mono text-xs leading-5">
-      <div ref={gutter} aria-hidden className="overflow-hidden bg-slate-50 py-2 text-right text-slate-400 select-none"
+    <div className="flex overflow-hidden rounded-md bg-surface-container-lowest font-mono text-[13px] leading-5 shadow-[inset_0_0_0_1px_var(--color-outline-variant)] focus-within:shadow-[inset_0_0_0_2px_var(--color-primary)]">
+      <div ref={gutter} aria-hidden className="overflow-hidden bg-surface-container py-2 text-right text-on-surface-variant select-none"
         style={{ height: `${rows * 1.25 + 1}rem` }}>
         {Array.from({ length: lineCount }, (_, i) => i + 1).map((n) => (
-          <div key={n} className={`px-2 ${errorLines.has(n) ? 'bg-red-100 font-semibold text-red-700' : ''}`}>{n}</div>
+          <div key={n} className={`px-2 ${errorLines.has(n) ? 'bg-error-container font-semibold text-on-error-container' : ''}`}>{n}</div>
         ))}
       </div>
       <textarea
-        className="flex-1 resize-none p-2 whitespace-pre focus:outline-none"
+        className="flex-1 resize-none bg-transparent p-2 whitespace-pre text-on-surface focus:outline-none"
         style={{ height: `${rows * 1.25 + 1}rem` }}
         spellCheck={false}
         wrap="off"
