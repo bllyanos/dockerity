@@ -422,7 +422,7 @@ dockerity/
 │   ├── reconcile/
 │   ├── auth/
 │   └── api/                  # HTTP handlers, SSE log streaming
-├── web/                      # React + Tailwind (Vite), embedded via go:embed
+├── web/                      # React + Tailwind (Vite) on the Tonal design system, embedded via go:embed
 ├── deploy/
 │   └── docker-compose.yml    # bootstrap: traefik + dockerity
 ├── Dockerfile                # multi-stage: web build, go build, small runtime

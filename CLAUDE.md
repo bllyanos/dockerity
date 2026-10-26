@@ -89,6 +89,12 @@ Planned layout is in section 12 of `docs/design.md`. Keep stable, pure logic (sp
 naming, deploy planning, Traefik label generation) in packages with no Docker or SQLite
 dependency so it can be unit-tested in isolation. Docker access goes through `internal/dockerx`.
 
+The UI uses the Tonal design system (Material You roles). Role colors, type roles and the
+state layer are defined in `web/src/index.css`; build screens from `web/src/components/ui`
+(Button, TextField, Section, Badge, Dialog, Tabs, ...) instead of raw Tailwind palette colors.
+Fonts and Material Symbols icons are bundled, so the UI needs no internet access; add an icon
+in `web/src/components/ui/iconSources.ts`.
+
 ## Planning
 
 Work is tracked as GitHub epics (label `epic`) that are broken into sub-issues during planning.
