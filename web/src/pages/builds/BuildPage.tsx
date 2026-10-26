@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router'
-import { cancelBuild, followBuildLog, getBuild, isTerminal, type Build, type BuildImage } from '../../api/builds'
+import { useNavigate, useParams } from 'react-router'
+import { getApp } from '../../api/apps'
+import { cancelBuild, followBuildLog, getBuild, isTerminal, triggerBuild, type Build, type BuildImage } from '../../api/builds'
 import { LogViewer } from '../../components/LogViewer'
 import { PageHeader } from '../../components/PageHeader'
 import { StatusBadge } from '../../components/StatusBadge'
-import { Cell, Table } from '../../components/Table'
-import { Button } from '../../components/form/Button'
+import { Cell, Row, Table } from '../../components/Table'
 import { ErrorMessage } from '../../components/form/ErrorMessage'
-import { formatDateTime } from '../../lib/format'
+import { Banner } from '../../components/ui/Banner'
+import { Button } from '../../components/ui/Button'
+import { Facts } from '../../components/ui/Facts'
+import { Section } from '../../components/ui/Section'
+import { formatDateTime, formatDuration } from '../../lib/format'
 
 export function BuildPage() {
   const id = Number(useParams().id)
@@ -16,7 +20,9 @@ export function BuildPage() {
 }
 
 function BuildView({ id }: { id: number }) {
+  const navigate = useNavigate()
   const [build, setBuild] = useState<Build | null>(null)
+  const [appName, setAppName] = useState('')
   const [images, setImages] = useState<BuildImage[]>([])
   const [log, setLog] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -32,6 +38,11 @@ function BuildView({ id }: { id: number }) {
 
   useEffect(() => refresh(), [refresh])
 
+  const appId = build?.appId
+  useEffect(() => {
+    if (appId) getApp(appId).then((a) => setAppName(a.name)).catch(() => setAppName(`App ${appId}`))
+  }, [appId])
+
   // Stream the log once; refresh the build when it ends to show the final status.
   useEffect(
     () =>
@@ -43,10 +54,9 @@ function BuildView({ id }: { id: number }) {
     [id, refresh],
   )
 
-  async function cancel() {
+  async function act(action: () => Promise<void>) {
     try {
-      await cancelBuild(id)
-      refresh()
+      await action()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -54,38 +64,49 @@ function BuildView({ id }: { id: number }) {
 
   if (!build) return <ErrorMessage error={error} />
 
+  const running = !isTerminal(build.status)
+
   return (
     <>
       <PageHeader
+        crumbs={[{ label: 'Apps', to: '/apps' }, { label: appName || '…', to: `/apps/${build.appId}` }, { label: 'Builds', to: `/apps/${build.appId}/builds` }, { label: `#${build.id}` }]}
         title={`Build #${build.id}`}
+        badge={<StatusBadge status={build.status} />}
         actions={
-          <div className="flex items-center gap-3">
-            <Link to={`/apps/${build.appId}`} className="text-sm text-slate-600 hover:underline">Back to app</Link>
-            {!isTerminal(build.status) && <Button variant="danger" onClick={() => void cancel()}>Cancel</Button>}
-          </div>
+          <>
+            {running && <Button variant="outlined" icon="block" onClick={() => void act(async () => { await cancelBuild(id); refresh() })}>Cancel build</Button>}
+            {build.status === 'failed' && (
+              <Button icon="refresh" onClick={() => void act(async () => navigate(`/builds/${(await triggerBuild(build.appId, build.ref)).id}`))}>Build again</Button>
+            )}
+          </>
         }
       />
       <ErrorMessage error={error} />
-      <dl className="mb-6 grid gap-4 text-sm sm:grid-cols-4">
-        <div><dt className="text-slate-500">Status</dt><dd><StatusBadge status={build.status} /></dd></div>
-        <div><dt className="text-slate-500">Ref</dt><dd>{build.ref}</dd></div>
-        <div><dt className="text-slate-500">Commit</dt><dd className="font-mono text-xs">{build.commitSha || '—'}</dd></div>
-        <div><dt className="text-slate-500">Finished</dt><dd>{formatDateTime(build.finishedAt)}</dd></div>
-      </dl>
-      {build.error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{build.error}</p>}
-      {images.length > 0 && (
-        <div className="mb-6">
+      <Section>
+        <Facts items={[
+          { label: 'Ref', value: <span className="font-mono">{build.ref}</span> },
+          { label: 'Commit', value: <span className="font-mono">{build.commitSha || '—'}</span> },
+          { label: 'Started', value: formatDateTime(build.startedAt ?? build.createdAt) },
+          running
+            ? { label: 'Status', value: 'In progress' }
+            : { label: 'Finished', value: `${formatDateTime(build.finishedAt)} (${formatDuration(build.startedAt, build.finishedAt)})` },
+        ]} />
+      </Section>
+      {build.error && <Banner tone="error" role="alert" title="The build failed.">{build.error}</Banner>}
+      <Section title="Images">
+        {images.length === 0 && <p className="body-medium text-on-surface-variant">Images show up here once every service has built.</p>}
+        {images.length > 0 && (
           <Table headers={['Service', 'Image', 'ID']}>
             {images.map((i) => (
-              <tr key={i.service}>
-                <Cell className="font-medium">{i.service}</Cell>
+              <Row key={i.service}>
+                <Cell className="title-small">{i.service}</Cell>
                 <Cell className="font-mono text-xs">{i.imageTag}</Cell>
-                <Cell className="font-mono text-xs">{i.imageId.slice(0, 19)}</Cell>
-              </tr>
+                <Cell className="font-mono text-xs text-on-surface-variant">{i.imageId.slice(0, 19)}</Cell>
+              </Row>
             ))}
           </Table>
-        </div>
-      )}
+        )}
+      </Section>
       <LogViewer text={log} />
     </>
   )

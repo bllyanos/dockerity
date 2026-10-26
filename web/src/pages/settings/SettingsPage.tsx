@@ -1,16 +1,29 @@
 import { useEffect, useState } from 'react'
 import { getSettings, saveSettings, type Settings, type TLSMode } from '../../api/settings'
 import { PageHeader } from '../../components/PageHeader'
-import { Button } from '../../components/form/Button'
 import { ErrorMessage } from '../../components/form/ErrorMessage'
-import { TextField } from '../../components/form/TextField'
 import { useSubmit } from '../../components/form/useSubmit'
+import { Banner } from '../../components/ui/Banner'
+import { Button } from '../../components/ui/Button'
+import { Icon, type IconName } from '../../components/ui/Icon'
+import { Section } from '../../components/ui/Section'
+import { SegmentedButton, type Segment } from '../../components/ui/SegmentedButton'
+import { TextField } from '../../components/ui/TextField'
 
-const modes: { value: TLSMode; label: string }[] = [
-  { value: 'none', label: 'None (HTTP only)' },
-  { value: 'certificate', label: 'Wildcard certificate files' },
-  { value: 'resolver', label: 'Traefik certificate resolver' },
+const modes: Segment<TLSMode>[] = [
+  { value: 'none', label: 'HTTP only', icon: 'lock_open' },
+  { value: 'certificate', label: 'Certificate files', icon: 'description' },
+  { value: 'resolver', label: 'Resolver', icon: 'autorenew' },
 ]
+
+function SectionTitle({ icon, tone, children }: { icon: IconName; tone: string; children: string }) {
+  return (
+    <span className="flex items-center gap-3">
+      <span className={`grid size-10 place-items-center rounded-md ${tone}`}><Icon name={icon} /></span>
+      {children}
+    </span>
+  )
+}
 
 export function SettingsPage() {
   const [form, setForm] = useState<Settings | null>(null)
@@ -29,41 +42,62 @@ export function SettingsPage() {
   })
 
   if (!form) return <ErrorMessage error={loadError} />
-  const set = (patch: Partial<Settings>) => setForm({ ...form, ...patch })
+  const set = (patch: Partial<Settings>) => {
+    setSaved(false)
+    setForm({ ...form, ...patch })
+  }
+  const base = form.baseDomain || 'apps.example.com'
 
   return (
-    <>
-      <PageHeader title="Settings" />
-      <form onSubmit={save.onSubmit} className="max-w-xl space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-        <TextField label="Base domain for ephemeral environments" name="baseDomain" placeholder="apps.example.com"
-          value={form.baseDomain} onChange={(e) => set({ baseDomain: e.target.value })} />
-        <p className="text-xs text-slate-500">
-          Needs a wildcard DNS record <code>*.{form.baseDomain || 'apps.example.com'}</code> pointing at this VM.
-          Environments get <code>&lt;env&gt;-&lt;app&gt;.{form.baseDomain || 'apps.example.com'}</code>.
-        </p>
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">HTTPS</span>
-          <select className="w-full rounded-md border border-slate-300 px-3 py-2" value={form.tlsMode}
-            onChange={(e) => set({ tlsMode: e.target.value as TLSMode })}>
-            {modes.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </select>
-        </label>
-        {form.tlsMode === 'certificate' && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextField label="Certificate file (in Traefik)" name="certFile" placeholder="/certs/wildcard.crt"
-              value={form.certFile} onChange={(e) => set({ certFile: e.target.value })} />
-            <TextField label="Key file (in Traefik)" name="keyFile" placeholder="/certs/wildcard.key"
-              value={form.keyFile} onChange={(e) => set({ keyFile: e.target.value })} />
+    <div className="flex max-w-[880px] flex-col gap-6">
+      <PageHeader title="Settings" subtitle="Routing for every app on this VM. Saving rewrites the Traefik routes." />
+      <form onSubmit={(e) => void save.onSubmit(e)} className="flex flex-col gap-6">
+        <Section title={<SectionTitle icon="timer" tone="bg-tertiary-container text-on-tertiary-container">Ephemeral environments</SectionTitle>}>
+          <TextField label="Base domain" name="baseDomain" placeholder="apps.example.com" leadingIcon="public"
+            value={form.baseDomain} onChange={(e) => set({ baseDomain: e.target.value })} />
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3">
+            <div className="flex flex-col gap-1">
+              <span className="label-medium text-on-surface-variant">Add this wildcard DNS record, pointing at this VM</span>
+              <code className="rounded-sm bg-surface-container-highest px-4 py-3 font-mono text-[13px]">*.{base}</code>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="label-medium text-on-surface-variant">Environments are then reachable at</span>
+              <code className="rounded-sm bg-surface-container-highest px-4 py-3 font-mono text-[13px]">&lt;env&gt;-&lt;app&gt;.{base}</code>
+            </div>
           </div>
-        )}
-        {form.tlsMode === 'resolver' && (
-          <TextField label="Certificate resolver name" name="certResolver" placeholder="le"
-            value={form.certResolver} onChange={(e) => set({ certResolver: e.target.value })} />
-        )}
+        </Section>
+
+        <Section title={<SectionTitle icon="lock" tone="bg-primary-container text-on-primary-container">HTTPS</SectionTitle>}>
+          <SegmentedButton label="HTTPS mode" options={modes} value={form.tlsMode} onChange={(tlsMode) => set({ tlsMode })} />
+          {form.tlsMode === 'none' && (
+            <p className="body-medium text-on-surface-variant">Apps are served over plain HTTP. Use this only behind another proxy that terminates TLS.</p>
+          )}
+          {form.tlsMode === 'certificate' && (
+            <>
+              <p className="body-medium text-on-surface-variant">Paths as Traefik sees them, for a wildcard certificate mounted into its container.</p>
+              <div className="flex flex-wrap gap-3">
+                <TextField label="Certificate file" name="certFile" placeholder="/certs/wildcard.crt" className="flex-[1_1_240px]"
+                  value={form.certFile} onChange={(e) => set({ certFile: e.target.value })} />
+                <TextField label="Key file" name="keyFile" placeholder="/certs/wildcard.key" className="flex-[1_1_240px]"
+                  value={form.keyFile} onChange={(e) => set({ keyFile: e.target.value })} />
+              </div>
+            </>
+          )}
+          {form.tlsMode === 'resolver' && (
+            <>
+              <p className="body-medium text-on-surface-variant">Traefik requests certificates itself, using a resolver from its static config.</p>
+              <TextField label="Certificate resolver name" name="certResolver" placeholder="le"
+                value={form.certResolver} onChange={(e) => set({ certResolver: e.target.value })} />
+            </>
+          )}
+        </Section>
+
         <ErrorMessage error={save.error} />
-        {saved && <p role="status" className="text-sm text-emerald-700">Saved. Routes were rewritten.</p>}
-        <Button type="submit" disabled={save.pending}>Save settings</Button>
+        {saved && <Banner tone="success" role="status">Saved. Routes were rewritten.</Banner>}
+        <div className="flex justify-end">
+          <Button type="submit" icon="save" disabled={save.pending}>Save settings</Button>
+        </div>
       </form>
-    </>
+    </div>
   )
 }

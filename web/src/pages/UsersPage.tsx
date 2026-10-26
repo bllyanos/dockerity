@@ -1,15 +1,20 @@
 import { useState } from 'react'
 import type { User } from '../api/auth'
-import { createUser, listUsers, resetPassword, setUserDisabled } from '../api/users'
+import { createUser, listUsers, setUserDisabled } from '../api/users'
 import { useUser } from '../auth/AuthContext'
 import { PageHeader } from '../components/PageHeader'
-import { Cell, Table } from '../components/Table'
-import { Button } from '../components/form/Button'
+import { Cell, Row, Table } from '../components/Table'
 import { ErrorMessage } from '../components/form/ErrorMessage'
-import { TextField } from '../components/form/TextField'
 import { useSubmit } from '../components/form/useSubmit'
+import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { IconButton } from '../components/ui/IconButton'
+import { Section } from '../components/ui/Section'
+import { Switch } from '../components/ui/Switch'
+import { TextField } from '../components/ui/TextField'
 import { formatDateTime } from '../lib/format'
 import { useLoad } from '../lib/useLoad'
+import { ResetPasswordDialog } from './users/ResetPasswordDialog'
 
 function CreateUserForm({ onCreated }: { onCreated: () => void }) {
   const [username, setUsername] = useState('')
@@ -24,78 +29,77 @@ function CreateUserForm({ onCreated }: { onCreated: () => void }) {
   })
 
   return (
-    <form onSubmit={onSubmit} className="mb-6 space-y-3 rounded-lg border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold">Add user</h2>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <TextField label="Username" name="new-username" required autoComplete="off"
+    <Section title="Add a user" className="flex-[1_1_320px]">
+      <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
+        <TextField label="Username" name="new-username" required autoComplete="off" leadingIcon="person"
           value={username} onChange={(e) => setUsername(e.target.value)} />
-        <TextField label="Password" name="new-password" type="password" required minLength={12}
+        <TextField label="Password" name="new-password" type="password" required minLength={12} leadingIcon="lock"
+          supporting="At least 12 characters. Share it with them yourself."
           autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-      </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />
-        Admin
-      </label>
-      <ErrorMessage error={error} />
-      <Button type="submit" disabled={pending}>Add user</Button>
-    </form>
+        <Switch label="Admin" checked={isAdmin} onChange={setIsAdmin} />
+        <ErrorMessage error={error} />
+        <div><Button type="submit" icon="person_add" disabled={pending}>Add user</Button></div>
+      </form>
+    </Section>
   )
 }
 
-function UserRow({ user, isSelf, onChanged }: { user: User; isSelf: boolean; onChanged: () => void }) {
+function UserRow({ user, isSelf, onChanged, onReset }: { user: User; isSelf: boolean; onChanged: () => void; onReset: () => void }) {
   const [error, setError] = useState<string | null>(null)
 
-  async function run(action: () => Promise<unknown>) {
+  async function toggle() {
     setError(null)
     try {
-      await action()
+      await setUserDisabled(user.id, !user.disabled)
       onChanged()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
   }
 
-  function promptReset() {
-    const pw = window.prompt(`New password for ${user.username} (at least 12 characters)`)
-    if (pw) void run(() => resetPassword(user.id, pw))
-  }
-
   return (
-    <tr>
-      <Cell className="font-medium">
-        {user.username}
-        {error && <p className="text-xs font-normal text-red-600">{error}</p>}
+    <Row>
+      <Cell>
+        <div className="flex items-center gap-3">
+          <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary-container title-small text-on-secondary-container">
+            {user.username.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="title-small">{user.username}</span>
+          {isSelf && <span className="body-small text-on-surface-variant">(you)</span>}
+        </div>
+        {error && <p className="mt-1 body-small text-error">{error}</p>}
       </Cell>
-      <Cell>{user.isAdmin ? 'Admin' : 'User'}</Cell>
-      <Cell>{user.disabled ? <span className="text-red-600">Disabled</span> : 'Active'}</Cell>
-      <Cell>{formatDateTime(user.createdAt)}</Cell>
-      <Cell className="space-x-2 text-right whitespace-nowrap">
-        <Button variant="secondary" onClick={promptReset}>Reset password</Button>
-        {!isSelf && (
-          <Button variant={user.disabled ? 'secondary' : 'danger'}
-            onClick={() => void run(() => setUserDisabled(user.id, !user.disabled))}>
-            {user.disabled ? 'Enable' : 'Disable'}
-          </Button>
-        )}
+      <Cell>{user.isAdmin ? <Badge tone="secondary" icon="shield_person">Admin</Badge> : <Badge tone="neutral" icon="person">User</Badge>}</Cell>
+      <Cell>{user.disabled ? <Badge tone="error" icon="block">Disabled</Badge> : <Badge tone="success" icon="check_circle">Active</Badge>}</Cell>
+      <Cell className="text-on-surface-variant tabular-nums">{formatDateTime(user.createdAt)}</Cell>
+      <Cell className="text-right whitespace-nowrap">
+        <IconButton icon="lock_reset" label={`Reset password for ${user.username}`} onClick={onReset} />
+        {!isSelf && <Button variant="text" onClick={() => void toggle()}>{user.disabled ? 'Enable' : 'Disable'}</Button>}
       </Cell>
-    </tr>
+    </Row>
   )
 }
 
 export function UsersPage() {
   const me = useUser()
   const { data: users, error, reload } = useLoad(listUsers)
+  const [resetting, setResetting] = useState<User | null>(null)
 
   return (
     <>
-      <PageHeader title="Users" />
-      <CreateUserForm onCreated={reload} />
-      <ErrorMessage error={error} />
-      <Table headers={['Username', 'Role', 'Status', 'Created', '']}>
-        {(users ?? []).map((u) => (
-          <UserRow key={u.id} user={u} isSelf={u.id === me.id} onChanged={reload} />
-        ))}
-      </Table>
+      <PageHeader title="Users" subtitle="Everyone who can sign in. Admins also manage users, settings and the audit log." />
+      {resetting && <ResetPasswordDialog user={resetting} onClose={() => setResetting(null)} />}
+      <div className="flex flex-wrap items-start gap-6">
+        <CreateUserForm onCreated={reload} />
+        <Section title="All users" className="flex-[2_1_560px]">
+          <ErrorMessage error={error} />
+          <Table headers={['User', 'Role', 'Status', 'Created', { label: 'Actions', hidden: true }]}>
+            {(users ?? []).map((u) => (
+              <UserRow key={u.id} user={u} isSelf={u.id === me.id} onChanged={reload} onReset={() => setResetting(u)} />
+            ))}
+          </Table>
+        </Section>
+      </div>
     </>
   )
 }
