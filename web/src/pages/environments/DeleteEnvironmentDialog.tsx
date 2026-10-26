@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { deleteEnvironment, type Environment } from '../../api/environments'
-import { Button } from '../../components/form/Button'
 import { ErrorMessage } from '../../components/form/ErrorMessage'
 import { useSubmit } from '../../components/form/useSubmit'
+import { Button } from '../../components/ui/Button'
+import { Dialog } from '../../components/ui/Dialog'
+import { Switch } from '../../components/ui/Switch'
+import { TextField } from '../../components/ui/TextField'
 
 /** Confirms deleting an environment, with the backup on by default. */
 export function DeleteEnvironmentDialog({ env, onClose }: { env: Environment; onClose: () => void }) {
@@ -16,28 +19,24 @@ export function DeleteEnvironmentDialog({ env, onClose }: { env: Environment; on
   })
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-slate-900/40 px-4">
-      <form onSubmit={remove.onSubmit} className="w-full max-w-md space-y-4 rounded-lg bg-white p-6 shadow-lg">
-        <h2 className="text-lg font-semibold">Delete {env.appName}/{env.name}?</h2>
-        <p className="text-sm text-slate-600">
-          All containers stop, and the environment's volumes are removed. This cannot be undone.
-        </p>
-        <label className="flex items-start gap-2 text-sm">
-          <input type="checkbox" className="mt-1" checked={backup} onChange={(e) => setBackup(e.target.checked)} />
-          <span>Back up stateful volumes first (recommended). Backups stay available after deletion.</span>
-        </label>
-        <label className="block text-sm">
-          <span className="mb-1 block text-slate-700">Type <strong>{env.name}</strong> to confirm</span>
-          <input className="w-full rounded-md border border-slate-300 px-3 py-2" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-        </label>
-        <ErrorMessage error={remove.error} />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="danger" disabled={remove.pending || confirm !== env.name}>
+    <Dialog alert title={`Delete ${env.appName} / ${env.name}?`} icon="delete_forever" iconClassName="text-error" onClose={onClose}
+      onSubmit={(e) => void remove.onSubmit(e)}
+      description="All containers stop, the route is removed and the environment's volumes are deleted. You can't undo this."
+      actions={
+        <>
+          <Button variant="text" onClick={onClose}>Cancel</Button>
+          <Button type="submit" icon="delete" disabled={remove.pending || confirm !== env.name}>
             {remove.pending ? 'Deleting…' : 'Delete environment'}
           </Button>
-        </div>
-      </form>
-    </div>
+        </>
+      }>
+      <div className="flex flex-col gap-1 rounded-lg bg-surface-container-highest px-4 py-3">
+        <Switch label="Back up stateful volumes first" checked={backup} onChange={setBackup} />
+        <p className="body-small text-on-surface-variant">Recommended. Backups stay available after the environment is gone.</p>
+      </div>
+      <TextField label={`Type ${env.name} to confirm`} name="confirm-name" autoComplete="off"
+        supporting="Delete unlocks when the name matches." value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+      <ErrorMessage error={remove.error} />
+    </Dialog>
   )
 }

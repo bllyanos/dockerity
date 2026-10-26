@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { updateApp, type App } from '../../api/apps'
-import { Button } from '../../components/form/Button'
 import { ErrorMessage } from '../../components/form/ErrorMessage'
-import { TextField } from '../../components/form/TextField'
 import { useSubmit } from '../../components/form/useSubmit'
+import { Button } from '../../components/ui/Button'
+import { Section } from '../../components/ui/Section'
+import { TextField } from '../../components/ui/TextField'
 
 type Props = { app: App; onChanged: (app: App) => void }
 
@@ -17,18 +18,19 @@ export function AppSettingsForm({ app, onChanged }: Props) {
   const dirty = repoUrl !== app.repoUrl || defaultBranch !== app.defaultBranch || maxEphemeral !== app.maxEphemeral
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold">Repository</h2>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <TextField label="Repo (SSH URL)" name="repoUrl" required
+    <Section title="Repository">
+      <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
+        <TextField label="Repository (SSH URL)" name="repoUrl" required leadingIcon="link"
           value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} />
-        <TextField label="Default branch" name="defaultBranch" required
+        <TextField label="Default branch" name="defaultBranch" required leadingIcon="alt_route"
           value={defaultBranch} onChange={(e) => setDefaultBranch(e.target.value)} />
-        <TextField label="Max ephemeral environments (0 = no limit)" name="maxEphemeral" type="number" min={0} max={1000}
-          value={String(maxEphemeral)} onChange={(e) => setMaxEphemeral(Number(e.target.value))} />
-      </div>
-      <ErrorMessage error={error} />
-      <Button type="submit" disabled={pending || !dirty}>Save</Button>
-    </form>
+        <TextField label="Max ephemeral environments" name="maxEphemeral" type="number" min={0} max={1000}
+          supporting="0 means no limit" value={String(maxEphemeral)} onChange={(e) => setMaxEphemeral(Number(e.target.value))} />
+        <ErrorMessage error={error} />
+        <div className="flex justify-end">
+          <Button type="submit" variant="tonal" disabled={pending || !dirty}>Save changes</Button>
+        </div>
+      </form>
+    </Section>
   )
 }
